@@ -91,5 +91,6 @@ It's a rather acceptable tradeoff and easy to enforce at the library level.
 * join, aka streams
 * increase code coverage
 * JavaDocs
-
+* Support schemas init in registry - why require schemas from users, always the same?
+* Sharded version for endless scalability
 

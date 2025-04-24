@@ -8,9 +8,7 @@ import java.util.function.Consumer;
 public interface EventSQLConsumers {
 
     Duration DEFAULT_POLLING_DELAY = Duration.ofSeconds(1);
-    Duration DEFAULT_MAX_POLLING_DELAY = Duration.ofSeconds(30);
-    int DEFAULT_MIN_EVENTS = 10;
-    int DEFAULT_MAX_EVENTS = 100;
+    int DEFAULT_IN_MEMORY_EVENTS = 50;
 
     void startConsumer(String topic, String name,
                        Consumer<Event> consumer);
@@ -18,6 +16,11 @@ public interface EventSQLConsumers {
     void startConsumer(String topic, String name,
                        Consumer<Event> consumer,
                        Duration pollingDelay);
+
+    void startConsumer(String topic, String name,
+                       Consumer<Event> consumer,
+                       Duration pollingDelay,
+                       int maxInMemoryEvents);
 
     void startBatchConsumer(String topic, String name,
                             Consumer<Collection<Event>> consumer,
@@ -39,8 +42,6 @@ public interface EventSQLConsumers {
                                            Duration maxPollingDelay) {
             return new ConsumptionConfig(minEvents, maxEvents, pollingDelay, maxPollingDelay);
         }
-
-        public static ConsumptionConfig BATCH_DEFAULTS = new ConsumptionConfig(DEFAULT_MIN_EVENTS, DEFAULT_MAX_EVENTS, DEFAULT_POLLING_DELAY, DEFAULT_MAX_POLLING_DELAY);
     }
 
     interface DLTEventFactory {

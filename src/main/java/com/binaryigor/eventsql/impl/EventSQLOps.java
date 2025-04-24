@@ -96,9 +96,15 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
 
     @Override
     public void startConsumer(String topic, String name, Consumer<Event> consumer, Duration pollingDelay) {
+        startConsumer(topic, name, consumer, DEFAULT_POLLING_DELAY, DEFAULT_IN_MEMORY_EVENTS);
+    }
+
+    @Override
+    public void startConsumer(String topic, String name, Consumer<Event> consumer,
+                              Duration pollingDelay, int maxInMemoryEvents) {
         startBatchConsumer(topic, name, new ConsumerWrapper(consumer),
                 // just a few, slight optimization
-                new ConsumptionConfig(1, 10, pollingDelay, pollingDelay));
+                new ConsumptionConfig(1, maxInMemoryEvents, pollingDelay, pollingDelay));
     }
 
     @Override
@@ -147,6 +153,9 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
         var consumerState = consumerStateOpt.get();
 
         var events = nextEvents(consumerState, consumptionConfig.maxEvents());
+        if (events.isEmpty()) {
+            return true;
+        }
         if (events.size() < consumptionConfig.minEvents() &&
                 shouldWaitForMinEvents(lastConsumptionAt.get(), consumptionConfig.maxPollingDelay())) {
             return true;

@@ -36,11 +36,6 @@ public class EventSQLRegistryImpl implements EventSQLRegistry {
                     .formatted(topic.partitions()));
         }
 
-        if (topicHasEventsOrConsumers(topic.name())) {
-            throw new IllegalArgumentException("%s topic has events or consumers - if you want to modify it, delete them first"
-                    .formatted(topic.name()));
-        }
-
         var currentTopicDefinitionOpt = topicRepository.ofName(topic.name());
         if (currentTopicDefinitionOpt.isEmpty()) {
             transactions.execute(() -> {
@@ -48,6 +43,15 @@ public class EventSQLRegistryImpl implements EventSQLRegistry {
                 topicRepository.save(topic);
             });
             return this;
+        }
+
+        if (currentTopicDefinitionOpt.get().equals(topic)) {
+            return this;
+        }
+
+        if (topicHasEventsOrConsumers(topic.name())) {
+            throw new IllegalArgumentException("%s topic has events or consumers - if you want to modify it, delete them first"
+                    .formatted(topic.name()));
         }
 
         topicRepository.save(topic);
