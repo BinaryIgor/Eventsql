@@ -2,7 +2,7 @@
 
 Events over SQL.
 
-## How does it work
+## How it works
 
 We just need to have two tables:
 ```sql
