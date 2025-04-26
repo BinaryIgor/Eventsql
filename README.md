@@ -4,8 +4,14 @@ Events over SQL.
 
 ## How it works
 
-We just need to have two tables:
+We just need to have three tables:
 ```sql
+CREATE TABLE topic (
+  name TEXT PRIMARY KEY,
+  partitions SMALLINT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE event (
   topic TEXT NOT NULL,
   id BIGSERIAL NOT NULL,
