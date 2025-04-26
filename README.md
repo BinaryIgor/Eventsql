@@ -29,7 +29,7 @@ CREATE TABLE consumer (
   partition SMALLINT NOT NULL,
   last_event_id BIGINT,
   last_consumption_at TIMESTAMP,
-  created_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   PRIMARY KEY (topic, name, partition)
 );
 ```
