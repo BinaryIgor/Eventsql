@@ -3,10 +3,10 @@ package com.binaryigor.eventsql.impl;
 import com.binaryigor.eventsql.Event;
 import com.binaryigor.eventsql.EventSQLConsumptionException;
 
-import java.util.Collection;
+import java.util.List;
 import java.util.function.Consumer;
 
-public class ConsumerWrapper implements Consumer<Collection<Event>> {
+public class ConsumerWrapper implements Consumer<List<Event>> {
 
     private final Consumer<Event> wrapped;
 
@@ -15,7 +15,7 @@ public class ConsumerWrapper implements Consumer<Collection<Event>> {
     }
 
     @Override
-    public void accept(Collection<Event> events) {
+    public void accept(List<Event> events) {
         events.forEach(e -> {
             try {
                 wrapped.accept(e);

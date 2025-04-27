@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: eventsql-benchmarks-app
+  datasource:
+    url: "${DB_URL:jdbc:postgresql://localhost:5432/benchmarks}"
+    username: "${DB_USERNAME:benchmarks}"
+    password: "${DB_PASSWORD:benchmarks}"
+  threads:
+    virtual:
+      enabled:
+        true
+  sql:
+    init.mode: ALWAYS
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: [ "health", "info", "prometheus" ]
+
+
+events:
+  datasource:
+    url: "${DB_URL:jdbc:postgresql://localhost:5543/events}"
+    username: "${DB_USERNAME:events}"
+    password: "${DB_PASSWORD:events}"
+  account-created-topic:
+    name: "account_created"
+    partitions: 10
+  account-created-topic-dlt:
+    name: "${events.account-created-topic.name}_dlt"
+    partitions: 10
+  account-created-consumer:
+    topic: "${events.account-created-topic.name}"
+    name: "benchmarks-consumer"
+    partitioned: true
