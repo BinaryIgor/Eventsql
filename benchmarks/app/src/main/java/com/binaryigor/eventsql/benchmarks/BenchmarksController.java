@@ -18,7 +18,8 @@ public class BenchmarksController {
     @PostMapping("/benchmarks/run")
     @ResponseStatus(HttpStatus.ACCEPTED)
     void run(@RequestParam("events") int events,
-             @RequestParam("perSecondRate") int perSecondRate) {
-        Thread.startVirtualThread(() -> benchmarks.run(events, perSecondRate));
+             @RequestParam("perSecondRate") int perSecondRate,
+             @RequestParam("batchConsumer") boolean batchConsumer) {
+        Thread.startVirtualThread(() -> benchmarks.run(events, perSecondRate, batchConsumer));
     }
 }

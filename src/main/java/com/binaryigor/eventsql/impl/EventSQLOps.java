@@ -122,7 +122,7 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
     }
 
     private void consumeEvents(ConsumerId consumerId,
-                               Consumer<Collection<Event>> consumer,
+                               Consumer<List<Event>> consumer,
                                ConsumptionConfig consumptionConfig) {
         var delayNextPolling = new AtomicBoolean(false);
         var lastConsumptionAt = new AtomicReference<>(clock.instant());
@@ -144,7 +144,7 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
 
     private boolean consumeNextEvents(ConsumerId consumerId,
                                       ConsumptionConfig consumptionConfig,
-                                      Consumer<Collection<Event>> consumer,
+                                      Consumer<List<Event>> consumer,
                                       AtomicReference<Instant> lastConsumptionAt) {
         var consumerStateOpt = consumerRepository.ofIdForUpdateSkippingLocked(consumerId);
         if (consumerStateOpt.isEmpty()) {
@@ -202,7 +202,7 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
 
     @Override
     public void startBatchConsumer(String topic, String name,
-                                   Consumer<Collection<Event>> consumer,
+                                   Consumer<List<Event>> consumer,
                                    ConsumptionConfig consumptionConfig) {
         var consumers = findPartitionedConsumers(topic, name);
         for (var c : consumers) {

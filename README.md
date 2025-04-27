@@ -83,7 +83,7 @@ It's a rather acceptable tradeoff and easy to enforce at the library level.
 
 ## TODO
 
-* performance benchmarks and various examples
+* performance benchmarks and more examples
 * usage examples
 * built-in outbox
 * expiring events/TTL?
@@ -91,6 +91,6 @@ It's a rather acceptable tradeoff and easy to enforce at the library level.
 * join, aka streams
 * increase code coverage
 * JavaDocs
-* Support schemas init in registry - why require schemas from users, always the same?
+* Support schemas init in registry - why require schemas from users, if it is always the same?
 * Sharded version for endless scalability
 

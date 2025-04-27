@@ -4,6 +4,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
+
 @Component
 public class AccountCreatedHandler {
 
@@ -20,6 +22,11 @@ public class AccountCreatedHandler {
     public void handle(AccountCreated accountCreated) {
         accountCreatedRepository.save(accountCreated);
         accountsHandledCounter.increment();
+    }
+
+    public void handle(Collection<AccountCreated> accountsCreated) {
+        accountCreatedRepository.save(accountsCreated);
+        accountsHandledCounter.increment(accountsCreated.size());
     }
 
     public int accountsHandledCount() {

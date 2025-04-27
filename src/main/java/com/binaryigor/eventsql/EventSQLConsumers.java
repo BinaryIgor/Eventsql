@@ -1,14 +1,14 @@
 package com.binaryigor.eventsql;
 
 import java.time.Duration;
-import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 public interface EventSQLConsumers {
 
     Duration DEFAULT_POLLING_DELAY = Duration.ofSeconds(1);
-    int DEFAULT_IN_MEMORY_EVENTS = 50;
+    int DEFAULT_IN_MEMORY_EVENTS = 10;
 
     void startConsumer(String topic, String name,
                        Consumer<Event> consumer);
@@ -23,7 +23,7 @@ public interface EventSQLConsumers {
                        int maxInMemoryEvents);
 
     void startBatchConsumer(String topic, String name,
-                            Consumer<Collection<Event>> consumer,
+                            Consumer<List<Event>> consumer,
                             ConsumptionConfig consumptionConfig);
 
     void configureDLTEventFactory(DLTEventFactory dltEventFactory);
@@ -41,6 +41,10 @@ public interface EventSQLConsumers {
                                            Duration pollingDelay,
                                            Duration maxPollingDelay) {
             return new ConsumptionConfig(minEvents, maxEvents, pollingDelay, maxPollingDelay);
+        }
+
+        public static ConsumptionConfig of(int minEvents, int maxEvents) {
+            return of(minEvents, maxEvents, DEFAULT_POLLING_DELAY, DEFAULT_POLLING_DELAY.multipliedBy(2));
         }
     }
 

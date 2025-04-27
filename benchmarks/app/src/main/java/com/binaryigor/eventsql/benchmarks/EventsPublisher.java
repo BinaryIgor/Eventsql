@@ -5,7 +5,6 @@ import com.binaryigor.eventsql.EventSQLPublisher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -18,11 +17,10 @@ public class EventsPublisher {
 
     public EventsPublisher(EventSQLPublisher eventSQLPublisher,
                            ObjectMapper objectMapper,
-                           @Value("${events.account-created-topic}")
-                           String accountCreatedTopic) {
+                           EventsProperties eventsProperties) {
         this.eventSQLPublisher = eventSQLPublisher;
         this.objectMapper = objectMapper;
-        this.accountCreatedTopic = accountCreatedTopic;
+        this.accountCreatedTopic = eventsProperties.accountCreatedTopic().name();
     }
 
     public void publishAccountCreated(AccountCreated accountCreated) {

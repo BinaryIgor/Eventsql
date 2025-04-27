@@ -18,24 +18,35 @@ import java.util.stream.IntStream;
 @Component
 public class Benchmarks {
 
-    private static final String BENCHMARK_DELIMITER = "\n" + "-".repeat(64) + "\n";
+    private static final String BENCHMARK_DELIMITER = "\n" + "-".repeat(128) + "\n";
     private static final Logger logger = LoggerFactory.getLogger(Benchmarks.class);
     private static final Random RANDOM = new Random();
     private final EventsPublisher eventsPublisher;
     private final AccountCreatedHandler accountCreatedHandler;
+    private final EventsConsumer eventsConsumer;
+    private final EventsProperties eventsProperties;
 
     public Benchmarks(EventsPublisher eventsPublisher,
-                      AccountCreatedHandler accountCreatedHandler) {
+                      AccountCreatedHandler accountCreatedHandler,
+                      EventsConsumer eventsConsumer,
+                      EventsProperties eventsProperties) {
         this.eventsPublisher = eventsPublisher;
         this.accountCreatedHandler = accountCreatedHandler;
+        this.eventsConsumer = eventsConsumer;
+        this.eventsProperties = eventsProperties;
     }
 
-    public void run(int events, int perSecondRate) {
+    public void run(int events, int perSecondRate, boolean batchConsumer) {
+        eventsConsumer.batchAccountCreatedHandler(batchConsumer);
+
         var start = Instant.now();
         var consumedBefore = accountCreatedHandler.accountsHandledCount();
 
         logger.info(BENCHMARK_DELIMITER);
-        logger.info("Starting next benchmark with {} events and {} perSecondRate", events, perSecondRate);
+        logger.info("Starting next benchmark with {} events and {} perSecondRate and batchConsumer: {}",
+                events, perSecondRate, batchConsumer);
+        logger.info("TopicDefinition: {}", eventsProperties.accountCreatedTopic());
+        logger.info("ConsumerDefinition: {}", eventsProperties.accountCreatedConsumer());
         logger.info("");
 
         var publishedEvents = 0;
