@@ -3,6 +3,9 @@ package com.binaryigor.eventsql;
 import com.binaryigor.eventsql.impl.EventSQLOps;
 import com.binaryigor.eventsql.impl.EventSQLRegistryImpl;
 import com.binaryigor.eventsql.impl.TopicDefinitionsCache;
+import com.binaryigor.eventsql.impl.sharded.ShardedEventSQLConsumers;
+import com.binaryigor.eventsql.impl.sharded.ShardedEventSQLPublisher;
+import com.binaryigor.eventsql.impl.sharded.ShardedEventSQLRegistry;
 import com.binaryigor.eventsql.impl.sql.SqlConsumerRepository;
 import com.binaryigor.eventsql.impl.sql.SqlEventRepository;
 import com.binaryigor.eventsql.impl.sql.SqlTopicRepository;
@@ -12,12 +15,24 @@ import org.jooq.impl.DSL;
 
 import javax.sql.DataSource;
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public class EventSQL {
 
     private final EventSQLRegistry registry;
-    private final EventSQLOps ops;
+    private final EventSQLPublisher publisher;
+    private final EventSQLConsumers consumers;
+
+    public static EventSQL sharded(Collection<DataSource> dataSources, SQLDialect dialect, Clock clock, Optional<EventSQLConsumers.DLTEventFactory> dltEventFactory) {
+        return new EventSQL(dataSources, dialect, clock, dltEventFactory);
+    }
+
+    public static EventSQL sharded(Collection<DataSource> dataSources, SQLDialect dialect, Clock clock) {
+        return new EventSQL(dataSources, dialect, clock, Optional.empty());
+    }
 
     public EventSQL(DataSource dataSource, SQLDialect sqlDialect, Clock clock) {
         this(dataSource, sqlDialect, clock, Optional.empty());
@@ -27,18 +42,50 @@ public class EventSQL {
                     SQLDialect sqlDialect,
                     Clock clock,
                     Optional<EventSQLConsumers.DLTEventFactory> dltEventFactory) {
-        var dslContext = DSL.using(dataSource, sqlDialect);
-        var transactions = new SqlTransactions(dslContext);
+        this(List.of(dataSource), sqlDialect, clock, dltEventFactory);
+    }
 
-        var topicRepository = new SqlTopicRepository(transactions);
-        var consumerRepository = new SqlConsumerRepository(transactions);
-        var eventRepository = new SqlEventRepository(transactions);
+    private EventSQL(Collection<DataSource> dataSources,
+                     SQLDialect sqlDialect,
+                     Clock clock,
+                     Optional<EventSQLConsumers.DLTEventFactory> dltEventFactory) {
+        if (dataSources.isEmpty()) {
+            throw new IllegalArgumentException("At least one data source is required");
+        }
 
-        registry = new EventSQLRegistryImpl(topicRepository, eventRepository, consumerRepository, transactions);
+        var registryList = new ArrayList<EventSQLRegistry>();
+        var publisherList = new ArrayList<EventSQLPublisher>();
+        var consumersList = new ArrayList<EventSQLConsumers>();
 
-        var topicDefinitionsCache = new TopicDefinitionsCache(topicRepository);
-        ops = new EventSQLOps(topicDefinitionsCache, transactions, consumerRepository, eventRepository, clock);
-        dltEventFactory.ifPresent(ops::configureDLTEventFactory);
+        dataSources.forEach(dataSource -> {
+            var dslContext = DSL.using(dataSource, sqlDialect);
+            var transactions = new SqlTransactions(dslContext);
+
+            var topicRepository = new SqlTopicRepository(transactions);
+            var consumerRepository = new SqlConsumerRepository(transactions);
+            var eventRepository = new SqlEventRepository(transactions);
+
+            var registry = new EventSQLRegistryImpl(topicRepository, eventRepository, consumerRepository, transactions);
+
+            var topicDefinitionsCache = new TopicDefinitionsCache(topicRepository);
+            var ops = new EventSQLOps(topicDefinitionsCache, transactions, consumerRepository, eventRepository, clock);
+            dltEventFactory.ifPresent(ops::configureDLTEventFactory);
+
+            registryList.add(registry);
+            publisherList.add(ops);
+            consumersList.add(ops);
+        });
+
+
+        if (dataSources.size() == 1) {
+            registry = registryList.getFirst();
+            publisher = publisherList.getFirst();
+            consumers = consumersList.getFirst();
+        } else {
+            registry = new ShardedEventSQLRegistry(registryList);
+            publisher = new ShardedEventSQLPublisher(publisherList);
+            consumers = new ShardedEventSQLConsumers(consumersList);
+        }
     }
 
     public EventSQLRegistry registry() {
@@ -46,14 +93,10 @@ public class EventSQL {
     }
 
     public EventSQLPublisher publisher() {
-        return ops;
+        return publisher;
     }
 
     public EventSQLConsumers consumers() {
-        return ops;
-    }
-
-    public EventSQLConsumers.DLTEventFactory configuredDltEventFactory() {
-        return ops.dltEventFactory();
+        return consumers;
     }
 }

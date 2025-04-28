@@ -23,8 +23,16 @@ management:
 
 
 events:
-  datasource:
-    url: "${DB_URL:jdbc:postgresql://localhost:5543/events}"
+  datasource1:
+    url: "${DB_URL:jdbc:postgresql://localhost:5555/events}"
+    username: "${DB_USERNAME:events}"
+    password: "${DB_PASSWORD:events}"
+  datasource2:
+    url: "${DB_URL:jdbc:postgresql://localhost:5556/events}"
+    username: "${DB_USERNAME:events}"
+    password: "${DB_PASSWORD:events}"
+  datasource3:
+    url: "${DB_URL:jdbc:postgresql://localhost:5557/events}"
     username: "${DB_USERNAME:events}"
     password: "${DB_PASSWORD:events}"
   account-created-topic:

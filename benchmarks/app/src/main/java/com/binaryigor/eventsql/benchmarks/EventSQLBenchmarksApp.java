@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
 import java.time.Clock;
+import java.util.List;
 
 @SpringBootApplication
 @EnableConfigurationProperties(EventsProperties.class)
@@ -34,17 +35,35 @@ public class EventSQLBenchmarksApp {
     }
 
     @Bean
-    @ConfigurationProperties("events.datasource")
-    DataSourceProperties eventSQLDataSourceProperties() {
+    @ConfigurationProperties("events.datasource1")
+    DataSourceProperties eventSQLDataSourceProperties1() {
+        return new DataSourceProperties();
+    }
+
+    @Bean
+    @ConfigurationProperties("events.datasource2")
+    DataSourceProperties eventSQLDataSourceProperties2() {
+        return new DataSourceProperties();
+    }
+
+    @Bean
+    @ConfigurationProperties("events.datasource3")
+    DataSourceProperties eventSQLDataSourceProperties3() {
         return new DataSourceProperties();
     }
 
     @Bean
     EventSQL eventSQL(Clock clock) {
-        var dataSource = eventSQLDataSourceProperties()
+        var dataSource1 = eventSQLDataSourceProperties1()
                 .initializeDataSourceBuilder()
                 .build();
-        return new EventSQL(dataSource, SQLDialect.POSTGRES, clock);
+        var dataSource2 = eventSQLDataSourceProperties2()
+                .initializeDataSourceBuilder()
+                .build();
+        var dataSource3 = eventSQLDataSourceProperties3()
+                .initializeDataSourceBuilder()
+                .build();
+        return EventSQL.sharded(List.of(dataSource1, dataSource2, dataSource3), SQLDialect.POSTGRES, clock);
     }
 
     @Bean

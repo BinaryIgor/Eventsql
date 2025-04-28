@@ -85,6 +85,8 @@ It's a rather acceptable tradeoff and easy to enforce at the library level.
 
 * performance benchmarks and more examples
 * usage examples
+  * just pub/sub
+  * giving access to event tables as a means of a simple export - since they are all there
 * built-in outbox
 * expiring events/TTL?
 * compact topics - unique key

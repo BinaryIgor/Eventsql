@@ -28,6 +28,8 @@ public interface EventSQLConsumers {
 
     void configureDLTEventFactory(DLTEventFactory dltEventFactory);
 
+    DLTEventFactory dltEventFactory();
+
     void stop(Duration timeout);
 
     record ConsumptionConfig(
