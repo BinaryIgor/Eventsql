@@ -80,19 +80,3 @@ WHERE topic = :topic AND name = :c_name AND partition = 0;
 Limitation being that if consumer is partitioned, it must have the exact same number of partition as in the topic
 definition.
 It's a rather acceptable tradeoff and easy to enforce at the library level.
-
-## TODO
-
-* performance benchmarks and more examples
-* usage examples
-  * just pub/sub
-  * giving access to event tables as a means of a simple export - since they are all there
-* built-in outbox
-* expiring events/TTL?
-* compact topics - unique key
-* join, aka streams
-* increase code coverage
-* JavaDocs
-* Support schemas init in registry - why require schemas from users, if it is always the same?
-* Sharded version for endless scalability
-

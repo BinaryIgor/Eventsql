@@ -1,6 +1,6 @@
 # Benchmarks
 
-Various benchmarks to show performance limits of EventSQL.
+Various benchmarks to show performance of EventSQL.
 
 ## Queries
 ```
@@ -10,6 +10,4 @@ on account_created_event ((encode(value, 'escape')::json->>'email'));
 ```
 
 ## TODO
-
-* separate test runner - publishing and checking if consumption is done!
-* consumer - simplify, no db;
+* sharding version tests -> endpoint to see when it's ready

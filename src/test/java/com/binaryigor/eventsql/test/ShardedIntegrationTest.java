@@ -96,7 +96,7 @@ public abstract class ShardedIntegrationTest {
                 """));
 
         testClock = new TestClock();
-        eventSQL = EventSQL.sharded(dataSources, SQLDialect.POSTGRES, testClock);
+        eventSQL = new EventSQL(dataSources, SQLDialect.POSTGRES, testClock);
         registry = eventSQL.registry();
         publisher = eventSQL.publisher();
         consumers = eventSQL.consumers();

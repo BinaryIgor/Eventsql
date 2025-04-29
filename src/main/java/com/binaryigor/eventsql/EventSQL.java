@@ -26,14 +26,6 @@ public class EventSQL {
     private final EventSQLPublisher publisher;
     private final EventSQLConsumers consumers;
 
-    public static EventSQL sharded(Collection<DataSource> dataSources, SQLDialect dialect, Clock clock, Optional<EventSQLConsumers.DLTEventFactory> dltEventFactory) {
-        return new EventSQL(dataSources, dialect, clock, dltEventFactory);
-    }
-
-    public static EventSQL sharded(Collection<DataSource> dataSources, SQLDialect dialect, Clock clock) {
-        return new EventSQL(dataSources, dialect, clock, Optional.empty());
-    }
-
     public EventSQL(DataSource dataSource, SQLDialect sqlDialect, Clock clock) {
         this(dataSource, sqlDialect, clock, Optional.empty());
     }
@@ -45,10 +37,16 @@ public class EventSQL {
         this(List.of(dataSource), sqlDialect, clock, dltEventFactory);
     }
 
-    private EventSQL(Collection<DataSource> dataSources,
-                     SQLDialect sqlDialect,
-                     Clock clock,
-                     Optional<EventSQLConsumers.DLTEventFactory> dltEventFactory) {
+    public EventSQL(Collection<DataSource> dataSources,
+                    SQLDialect sqlDialect,
+                    Clock clock) {
+        this(dataSources, sqlDialect, clock, Optional.empty());
+    }
+
+    public EventSQL(Collection<DataSource> dataSources,
+                    SQLDialect sqlDialect,
+                    Clock clock,
+                    Optional<EventSQLConsumers.DLTEventFactory> dltEventFactory) {
         if (dataSources.isEmpty()) {
             throw new IllegalArgumentException("At least one data source is required");
         }
@@ -56,6 +54,9 @@ public class EventSQL {
         var registryList = new ArrayList<EventSQLRegistry>();
         var publisherList = new ArrayList<EventSQLPublisher>();
         var consumersList = new ArrayList<EventSQLConsumers>();
+
+        System.setProperty("org.jooq.no-logo", "true");
+        System.setProperty("org.jooq.no-tips", "true");
 
         dataSources.forEach(dataSource -> {
             var dslContext = DSL.using(dataSource, sqlDialect);

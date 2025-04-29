@@ -4,8 +4,14 @@ import com.binaryigor.eventsql.ConsumerDefinition;
 import com.binaryigor.eventsql.TopicDefinition;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.List;
+
 @ConfigurationProperties("events")
 public record EventsProperties(TopicDefinition accountCreatedTopic,
                                TopicDefinition accountCreatedTopicDlt,
-                               ConsumerDefinition accountCreatedConsumer) {
+                               List<ConsumerDefinition> accountCreatedConsumers,
+                               List<DataSourceProperties> dataSources) {
+
+    record DataSourceProperties(String url, String username, String password, int connections) {
+    }
 }

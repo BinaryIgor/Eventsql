@@ -13,7 +13,8 @@
         <maven.compiler.target>21</maven.compiler.target>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <jooq.version>3.20.3</jooq.version>
+        <!-- not latest, for safer support of older dbs: https://www.jooq.org/download/support-matrix -->
+        <jooq.version>3.19.11</jooq.version>
         <slf4j.version>2.0.17</slf4j.version>
         <junit5.version>5.12.2</junit5.version>
         <assert4j.version>3.27.2</assert4j.version>

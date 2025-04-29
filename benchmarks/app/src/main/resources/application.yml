@@ -1,16 +1,10 @@
 spring:
   application:
     name: eventsql-benchmarks-app
-  datasource:
-    url: "${DB_URL:jdbc:postgresql://localhost:5432/benchmarks}"
-    username: "${DB_USERNAME:benchmarks}"
-    password: "${DB_PASSWORD:benchmarks}"
   threads:
     virtual:
       enabled:
         true
-  sql:
-    init.mode: ALWAYS
 
 server:
   port: 8080
@@ -21,27 +15,25 @@ management:
       exposure:
         include: [ "health", "info", "prometheus" ]
 
-
 events:
-  datasource1:
-    url: "${DB_URL:jdbc:postgresql://localhost:5555/events}"
-    username: "${DB_USERNAME:events}"
-    password: "${DB_PASSWORD:events}"
-  datasource2:
-    url: "${DB_URL:jdbc:postgresql://localhost:5556/events}"
-    username: "${DB_USERNAME:events}"
-    password: "${DB_PASSWORD:events}"
-  datasource3:
-    url: "${DB_URL:jdbc:postgresql://localhost:5557/events}"
-    username: "${DB_USERNAME:events}"
-    password: "${DB_PASSWORD:events}"
+  data-sources:
+    - url: "${DB_URL:jdbc:postgresql://localhost:5432/events}"
+      username: "${DB_USERNAME:events}"
+      password: "${DB_PASSWORD:events}"
+      connections: 10
+#    - url: "${DB_URL:jdbc:postgresql://localhost:5433/events}"
+#      username: "${DB_USERNAME:events}"
+#      password: "${DB_PASSWORD:events}"
+#    - url: "${DB_URL:jdbc:postgresql://localhost:5434/events}"
+#      username: "${DB_USERNAME:events}"
+#      password: "${DB_PASSWORD:events}"
   account-created-topic:
     name: "account_created"
     partitions: 10
   account-created-topic-dlt:
     name: "${events.account-created-topic.name}_dlt"
     partitions: 10
-  account-created-consumer:
-    topic: "${events.account-created-topic.name}"
-    name: "benchmarks-consumer"
-    partitioned: true
+  account-created-consumers:
+    - topic: "${events.account-created-topic.name}"
+      partitioned: true
+      name: "test-consumer"

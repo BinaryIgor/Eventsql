@@ -123,7 +123,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
         var event1 = TestObjects.randomEventPublication(TOPIC, "event1");
         var event2 = TestObjects.randomEventPublication(TOPIC, "event2Failure");
         var event3 = TestObjects.randomEventPublication(TOPIC, "event3");
-        var capturedEventKeys = new LinkedHashSet<String>();
+        var capturedEventKeys = Collections.synchronizedSet(new LinkedHashSet<String>());
 
         // when
         consumers.startConsumer(consumer.topic(), consumer.name(), e -> {
@@ -137,7 +137,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
         publisher.publish(event3);
 
         // then
-        delay(100);
+        delay(500);
         assertThat(capturedEventKeys)
                 .containsOnly("event1", "event2Failure");
     }
