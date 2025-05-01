@@ -10,7 +10,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 import javax.sql.DataSource;
-import java.time.Clock;
 
 @SpringBootApplication
 @EnableConfigurationProperties(EventsProperties.class)
@@ -21,16 +20,12 @@ public class EventSQLBenchmarksApp {
     }
 
     @Bean
-    Clock clock() {
-        return Clock.systemUTC();
-    }
-
-    @Bean
-    EventSQL eventSQL(Clock clock, EventsProperties eventsProperties) {
+    EventSQL eventSQL(EventsProperties eventsProperties) {
         var dataSources = eventsProperties.dataSources().stream()
+                .filter(EventsProperties.DataSourceProperties::enabled)
                 .map(this::dataSource)
                 .toList();
-        return new EventSQL(dataSources, SQLDialect.POSTGRES, clock);
+        return new EventSQL(dataSources, SQLDialect.POSTGRES);
     }
 
     private DataSource dataSource(EventsProperties.DataSourceProperties properties) {

@@ -1,6 +1,10 @@
 # Maven/Java
 target/
 out/
+# Python/Scripts
+venv/
+.venv/
+dist/
 # Intellij
 .idea/
 *.iml

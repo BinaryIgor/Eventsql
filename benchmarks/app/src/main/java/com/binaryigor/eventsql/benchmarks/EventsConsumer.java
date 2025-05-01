@@ -1,10 +1,9 @@
 package com.binaryigor.eventsql.benchmarks;
 
-import com.binaryigor.eventsql.Event;
-import com.binaryigor.eventsql.EventSQL;
-import com.binaryigor.eventsql.EventSQLConsumers;
-import com.binaryigor.eventsql.EventSQLConsumptionException;
+import com.binaryigor.eventsql.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -12,28 +11,34 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 @Component
 public class EventsConsumer {
 
+    private static final Random RANDOM = new Random();
     private static final Logger logger = LoggerFactory.getLogger(EventsConsumer.class);
     private final EventSQL eventSQL;
     private final ObjectMapper objectMapper;
-    private final AccountCreatedHandler accountCreatedHandler;
     private final EventsProperties eventsProperties;
     private final AtomicBoolean accountCreatedBatchHandler = new AtomicBoolean(true);
+    private final Map<String, Counter> accountHandledCountersByConsumer;
 
     public EventsConsumer(EventSQL eventSQL,
                           ObjectMapper objectMapper,
-                          AccountCreatedHandler accountCreatedHandler,
-                          EventsProperties eventsProperties) {
+                          EventsProperties eventsProperties,
+                          MeterRegistry meterRegistry) {
         this.eventSQL = eventSQL;
         this.objectMapper = objectMapper;
-        this.accountCreatedHandler = accountCreatedHandler;
         this.eventsProperties = eventsProperties;
+
+        this.accountHandledCountersByConsumer = eventsProperties.accountCreatedConsumers().stream()
+                .collect(Collectors.toMap(ConsumerDefinition::name,
+                        c -> Counter.builder("accounts_handled_total")
+                                .tag("consumer", c.name())
+                                .register(meterRegistry)));
     }
 
     public void batchAccountCreatedHandler(boolean batch) {
@@ -53,9 +58,9 @@ public class EventsConsumer {
                             .startBatchConsumer(c.topic(), c.name(),
                                     events -> {
                                         if (accountCreatedBatchHandler.get()) {
-                                            handleAccountCreatedEvents(events);
+                                            handleAccountCreatedEvents(c.name(), events);
                                         } else {
-                                            events.forEach(this::handleAccountCreatedEvent);
+                                            events.forEach(e -> handleAccountCreatedEvent(c.name(), e));
                                         }
                                     },
                                     EventSQLConsumers.ConsumptionConfig.of(10, 100));
@@ -67,10 +72,12 @@ public class EventsConsumer {
         eventSQL.consumers().stop(Duration.ofSeconds(5));
     }
 
-    private void handleAccountCreatedEvent(Event event) {
+    private void handleAccountCreatedEvent(String consumer, Event event) {
         try {
             var accountCreated = objectMapper.readValue(event.value(), AccountCreated.class);
-            accountCreatedHandler.handle(accountCreated);
+            handleDelay();
+            accountHandledCountersByConsumer.get(consumer)
+                    .increment();
         } catch (IllegalStateException e) {
             throw new EventSQLConsumptionException(e, event);
         } catch (Exception e) {
@@ -79,13 +86,15 @@ public class EventsConsumer {
         }
     }
 
-    private void handleAccountCreatedEvents(List<Event> events) {
+    private void handleAccountCreatedEvents(String consumer, List<Event> events) {
         try {
             var accountsCreated = new ArrayList<AccountCreated>(events.size());
             for (var e : events) {
                 accountsCreated.add(objectMapper.readValue(e.value(), AccountCreated.class));
             }
-            accountCreatedHandler.handle(accountsCreated);
+            handleDelay();
+            accountHandledCountersByConsumer.get(consumer)
+                    .increment(accountsCreated.size());
         } catch (IllegalStateException e) {
             var firstFailedEvent = events.getFirst();
             throw new EventSQLConsumptionException(e, firstFailedEvent);
@@ -93,5 +102,19 @@ public class EventsConsumer {
             logger.error("Problem while handling AccountCreated events:", e);
             throw new RuntimeException(e);
         }
+    }
+
+    private void handleDelay() {
+        try {
+            Thread.sleep(1 + RANDOM.nextInt(100));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public int handledEventsTotal(String consumer) {
+        return Optional.ofNullable(accountHandledCountersByConsumer.get(consumer))
+                .map(c -> (int) c.count())
+                .orElse(0);
     }
 }

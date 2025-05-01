@@ -2,6 +2,14 @@
 
 Events over SQL.
 
+Simple, Reliable, Fast.
+
+Able to publish and consume thousands of events per second on a single PostgreSQL instance.
+
+With sharding, it can easily support tens of thousands events per second for virtually endless scalability.
+
+For scalability details, see [benchmarks](/benchmarks/README.md).
+
 ## How it works
 
 We just need to have three tables:
@@ -80,3 +88,7 @@ WHERE topic = :topic AND name = :c_name AND partition = 0;
 Limitation being that if consumer is partitioned, it must have the exact same number of partition as in the topic
 definition.
 It's a rather acceptable tradeoff and easy to enforce at the library level.
+
+## How to use it
+
+TODO: for now, check out benchmarks/app being an example app.
