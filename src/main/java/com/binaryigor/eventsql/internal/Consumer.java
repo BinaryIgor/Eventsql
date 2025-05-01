@@ -1,4 +1,4 @@
-package com.binaryigor.eventsql.impl;
+package com.binaryigor.eventsql.internal;
 
 import java.time.Instant;
 

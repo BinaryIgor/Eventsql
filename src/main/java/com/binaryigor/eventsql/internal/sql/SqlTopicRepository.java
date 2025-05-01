@@ -1,7 +1,7 @@
-package com.binaryigor.eventsql.impl.sql;
+package com.binaryigor.eventsql.internal.sql;
 
 import com.binaryigor.eventsql.TopicDefinition;
-import com.binaryigor.eventsql.impl.TopicRepository;
+import com.binaryigor.eventsql.internal.TopicRepository;
 import org.jooq.Field;
 import org.jooq.Table;
 import org.jooq.impl.DSL;

@@ -1,15 +1,15 @@
 package com.binaryigor.eventsql;
 
-import com.binaryigor.eventsql.impl.EventSQLOps;
-import com.binaryigor.eventsql.impl.EventSQLRegistryImpl;
-import com.binaryigor.eventsql.impl.TopicDefinitionsCache;
-import com.binaryigor.eventsql.impl.sharded.ShardedEventSQLConsumers;
-import com.binaryigor.eventsql.impl.sharded.ShardedEventSQLPublisher;
-import com.binaryigor.eventsql.impl.sharded.ShardedEventSQLRegistry;
-import com.binaryigor.eventsql.impl.sql.SqlConsumerRepository;
-import com.binaryigor.eventsql.impl.sql.SqlEventRepository;
-import com.binaryigor.eventsql.impl.sql.SqlTopicRepository;
-import com.binaryigor.eventsql.impl.sql.SqlTransactions;
+import com.binaryigor.eventsql.internal.EventSQLOps;
+import com.binaryigor.eventsql.internal.DefaultEventSQLRegistry;
+import com.binaryigor.eventsql.internal.TopicDefinitionsCache;
+import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLConsumers;
+import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLPublisher;
+import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLRegistry;
+import com.binaryigor.eventsql.internal.sql.SqlConsumerRepository;
+import com.binaryigor.eventsql.internal.sql.SqlEventRepository;
+import com.binaryigor.eventsql.internal.sql.SqlTopicRepository;
+import com.binaryigor.eventsql.internal.sql.SqlTransactions;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 
@@ -66,7 +66,7 @@ public class EventSQL {
             var consumerRepository = new SqlConsumerRepository(transactions);
             var eventRepository = new SqlEventRepository(transactions);
 
-            var registry = new EventSQLRegistryImpl(topicRepository, eventRepository, consumerRepository, transactions);
+            var registry = new DefaultEventSQLRegistry(topicRepository, eventRepository, consumerRepository, transactions);
 
             var topicDefinitionsCache = new TopicDefinitionsCache(topicRepository);
             var ops = new EventSQLOps(topicDefinitionsCache, transactions, consumerRepository, eventRepository, clock);

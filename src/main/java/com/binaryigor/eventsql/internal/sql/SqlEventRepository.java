@@ -1,8 +1,8 @@
-package com.binaryigor.eventsql.impl.sql;
+package com.binaryigor.eventsql.internal.sql;
 
 import com.binaryigor.eventsql.Event;
 import com.binaryigor.eventsql.EventPublication;
-import com.binaryigor.eventsql.impl.EventRepository;
+import com.binaryigor.eventsql.internal.EventRepository;
 import org.jooq.Field;
 import org.jooq.JSONB;
 import org.jooq.Table;

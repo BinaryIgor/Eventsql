@@ -5,6 +5,6 @@
 * expiring events/TTL?
 * compact topics - unique key
 * join, aka streams
-* increase code coverage
+* more elaborate definitions change support
 * JavaDocs
 * Support schemas init in registry - why require schemas from users, if it is always the same?

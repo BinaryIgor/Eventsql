@@ -1,4 +1,4 @@
-package com.binaryigor.eventsql.impl;
+package com.binaryigor.eventsql.internal;
 
 import com.binaryigor.eventsql.ConsumerDefinition;
 import com.binaryigor.eventsql.EventSQLRegistry;
@@ -11,17 +11,17 @@ import java.util.stream.IntStream;
 
 import static java.util.stream.Collectors.toList;
 
-public class EventSQLRegistryImpl implements EventSQLRegistry {
+public class DefaultEventSQLRegistry implements EventSQLRegistry {
 
     private final TopicRepository topicRepository;
     private final EventRepository eventRepository;
     private final ConsumerRepository consumerRepository;
     private final Transactions transactions;
 
-    public EventSQLRegistryImpl(TopicRepository topicRepository,
-                                EventRepository eventRepository,
-                                ConsumerRepository consumerRepository,
-                                Transactions transactions) {
+    public DefaultEventSQLRegistry(TopicRepository topicRepository,
+                                   EventRepository eventRepository,
+                                   ConsumerRepository consumerRepository,
+                                   Transactions transactions) {
         this.topicRepository = topicRepository;
         this.eventRepository = eventRepository;
         this.consumerRepository = consumerRepository;

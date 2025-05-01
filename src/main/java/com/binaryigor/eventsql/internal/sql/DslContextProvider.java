@@ -1,4 +1,4 @@
-package com.binaryigor.eventsql.impl.sql;
+package com.binaryigor.eventsql.internal.sql;
 
 import org.jooq.DSLContext;
 

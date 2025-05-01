@@ -2,18 +2,20 @@ package com.binaryigor.eventsql;
 
 import com.binaryigor.eventsql.test.IntegrationTest;
 import com.binaryigor.eventsql.test.TestObjects;
-import com.binaryigor.eventsql.test.Tests;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static com.binaryigor.eventsql.test.Tests.awaitAssertion;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.*;
 
 public class EventSQLConsumersTest extends IntegrationTest {
 
@@ -116,6 +118,61 @@ public class EventSQLConsumersTest extends IntegrationTest {
     }
 
     @Test
+    void eventuallyConsumesEventsInBatchesWhenThereIsLessThanMinEvents() {
+        // given
+        var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
+        registry.registerConsumer(consumer);
+        var capturedBatches = new ArrayList<Collection<Event>>();
+        var event = TestObjects.randomEventPublication(TOPIC);
+
+        // when
+        consumers.startBatchConsumer(consumer.topic(), consumer.name(), capturedBatches::add,
+                EventSQLConsumers.ConsumptionConfig.of(5, 10,
+                        Duration.ofMillis(10), Duration.ofMillis(100)));
+        publisher.publish(event);
+
+        // and when
+        delay(100);
+        testClock.moveTimeBy(100);
+
+        // then
+        awaitAssertion(() -> {
+            assertThat(capturedBatches).hasSize(1);
+            assertExpectedEvents(capturedBatches.getFirst(), event);
+        });
+    }
+
+    @Test
+    void safelyConsumesByLockingMultipleConsumerInstancesOnDbLevel() {
+        // given
+        var topic = new TopicDefinition(TOPIC, -1);
+        var consumer = new ConsumerDefinition(topic.name(), "multiplied-consumer", false);
+        // lots of concurrency
+        var eventSQLInstances = Stream.generate(this::newEventSQLInstance).limit(50).toList();
+
+        // lots of events to increase the probability of concurrency conflict
+        var eventsToPublish = Stream.generate(() -> TestObjects.randomEventPublication(TOPIC))
+                .limit(50)
+                .toList();
+        var capturedEvents = new ArrayList<Event>();
+
+        eventSQLInstances.getFirst()
+                .registry()
+                .registerTopic(topic)
+                .registerConsumer(consumer);
+
+        // when
+        eventSQLInstances.forEach(instance -> instance.consumers()
+                .startConsumer(consumer.topic(), consumer.name(), capturedEvents::add,
+                        // shorting polling delay to increase the probability of concurrency conflict
+                        Duration.ofMillis(10)));
+        eventsToPublish.forEach(publisher::publish);
+
+        // then
+        awaitAssertion(() -> assertExpectedEventsList(capturedEvents, eventsToPublish));
+    }
+
+    @Test
     void onFailureForTopicWithoutDltConsumptionIsStuckOnFailedEvent() {
         // given
         var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
@@ -123,7 +180,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
         var event1 = TestObjects.randomEventPublication(TOPIC, "event1");
         var event2 = TestObjects.randomEventPublication(TOPIC, "event2Failure");
         var event3 = TestObjects.randomEventPublication(TOPIC, "event3");
-        var capturedEventKeys = Collections.synchronizedSet(new LinkedHashSet<String>());
+        var capturedEventKeys = new LinkedHashSet<String>();
 
         // when
         consumers.startConsumer(consumer.topic(), consumer.name(), e -> {
@@ -131,13 +188,13 @@ public class EventSQLConsumersTest extends IntegrationTest {
             if (e.key().contains("Failure")) {
                 throw new RuntimeException("Failure!");
             }
-        }, Duration.ofMillis(10));
+        }, Duration.ofMillis(1));
         publisher.publish(event1);
         publisher.publish(event2);
         publisher.publish(event3);
 
         // then
-        delay(500);
+        delay(100);
         assertThat(capturedEventKeys)
                 .containsOnly("event1", "event2Failure");
     }
@@ -183,15 +240,22 @@ public class EventSQLConsumersTest extends IntegrationTest {
     }
 
     @Test
-    void consumesEventsInLoop() {
+    void consumesEventsInLoopContinuingOnFailures() {
         // given
         var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
         registry.registerConsumer(consumer);
         var capturedEvents = new ArrayList<Event>();
         var eventsToPublish = 50;
+        var exceptionsToThrow = new AtomicInteger(3);
 
         // when
-        consumers.startConsumer(consumer.topic(), consumer.name(), capturedEvents::add, Duration.ofMillis(10));
+        consumers.startBatchConsumer(consumer.topic(), consumer.name(), e -> {
+            if (exceptionsToThrow.getAndDecrement() > 0) {
+                throw new RuntimeException("Failure");
+            }
+            capturedEvents.addAll(e);
+        }, EventSQLConsumers.ConsumptionConfig.of(1, 1,
+                Duration.ofMillis(10), Duration.ofMillis(10)));
 
         IntStream.range(0, eventsToPublish)
                 .forEach($ -> {
@@ -201,6 +265,30 @@ public class EventSQLConsumersTest extends IntegrationTest {
 
         // then
         awaitAssertion(() -> assertThat(capturedEvents).hasSize(eventsToPublish));
+    }
+
+    @Test
+    void startsConsumersIdempotently() {
+        // given
+        var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
+        registry.registerConsumer(consumer);
+
+        // expect
+        assertThatCode(() -> {
+            consumers.startConsumer(consumer.topic(), consumer.name(), e -> {
+            });
+            consumers.startConsumer(consumer.topic(), consumer.name(), e -> {
+            });
+        }).doesNotThrowAnyException();
+    }
+
+    @Test
+    void doesNotAllowToStartNonExistingConsumer() {
+        assertThatThrownBy(() -> consumers.startConsumer(TOPIC, "non-existing",
+                e -> {
+                }))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("There are no consumers of %s topic and %s name".formatted(TOPIC, "non-existing"));
     }
 
     private void assertExpectedEvents(Collection<Event> capturedEvents, EventPublication... expectations) {

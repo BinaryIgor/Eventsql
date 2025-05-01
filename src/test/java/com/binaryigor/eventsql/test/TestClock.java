@@ -1,6 +1,7 @@
 package com.binaryigor.eventsql.test;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 
@@ -19,6 +20,10 @@ public class TestClock extends Clock {
 
     public void time(Instant time) {
         this.time = time;
+    }
+
+    public void moveTimeBy(long millis) {
+        time(time.plusMillis(millis));
     }
 
     @Override

@@ -1,4 +1,4 @@
-package com.binaryigor.eventsql.impl;
+package com.binaryigor.eventsql.internal;
 
 import com.binaryigor.eventsql.EventPublication;
 import com.binaryigor.eventsql.EventSQLConsumers;
@@ -31,7 +31,7 @@ public class DefaultDLTEventFactory implements EventSQLConsumers.DLTEventFactory
 
         var cause = exception.getCause();
         metadata.put("exceptionType", cause.getClass().getName());
-        metadata.put("exceptionMessage", cause.getMessage());
+        metadata.put("exceptionMessage", Optional.ofNullable(cause.getMessage()).orElse(exception.getMessage()));
 
         // TODO: maybe warning, strange situation
         var partition = dltTopicDefinitionOpt.get().partitions() < event.partition() ? -1 : dltTopicDefinitionOpt.get().partitions();

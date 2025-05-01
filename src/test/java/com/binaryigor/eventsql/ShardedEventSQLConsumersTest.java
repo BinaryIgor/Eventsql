@@ -5,6 +5,7 @@ import com.binaryigor.eventsql.test.TestObjects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -17,6 +18,7 @@ public class ShardedEventSQLConsumersTest extends ShardedIntegrationTest {
 
     private static final String TOPIC = "topic";
     private static final String PARTITIONED_TOPIC = "partitioned_topic";
+    private static final Duration CONSUMER_POLLING_DELAY = Duration.ofMillis(10);
 
     @BeforeEach
     void setup() {
@@ -36,7 +38,7 @@ public class ShardedEventSQLConsumersTest extends ShardedIntegrationTest {
         var capturedEvents = new ArrayList<Event>();
 
         // when
-        consumers.startConsumer(consumer.topic(), consumer.name(), capturedEvents::add);
+        consumers.startConsumer(consumer.topic(), consumer.name(), capturedEvents::add, CONSUMER_POLLING_DELAY);
         events.forEach(publisher::publish);
 
         // then
@@ -71,7 +73,7 @@ public class ShardedEventSQLConsumersTest extends ShardedIntegrationTest {
             } else {
                 p2CapturedEvents.add(e);
             }
-        });
+        }, CONSUMER_POLLING_DELAY);
         p0Events.forEach(publisher::publish);
         p1Events.forEach(publisher::publish);
         p2Events.forEach(publisher::publish);

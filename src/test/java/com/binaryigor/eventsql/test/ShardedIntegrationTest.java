@@ -4,27 +4,26 @@ import com.binaryigor.eventsql.EventSQL;
 import com.binaryigor.eventsql.EventSQLConsumers;
 import com.binaryigor.eventsql.EventSQLPublisher;
 import com.binaryigor.eventsql.EventSQLRegistry;
-import com.binaryigor.eventsql.impl.ConsumerRepository;
-import com.binaryigor.eventsql.impl.EventRepository;
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
+import com.binaryigor.eventsql.internal.EventRepository;
+import com.binaryigor.eventsql.internal.sql.SqlEventRepository;
+import com.binaryigor.eventsql.internal.sql.SqlTransactions;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
-import org.jooq.impl.DSL;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 import javax.sql.DataSource;
 import java.time.Duration;
 import java.util.List;
 
-// TODO: merge into one with IntegrationTest, configurable?
+import static com.binaryigor.eventsql.test.IntegrationTest.*;
+
 public abstract class ShardedIntegrationTest {
 
-    protected static final PostgreSQLContainer<?> POSTGRES1 = new PostgreSQLContainer(DockerImageName.parse("postgres:16"));
-    protected static final PostgreSQLContainer<?> POSTGRES2 = new PostgreSQLContainer(DockerImageName.parse("postgres:16"));
+    protected static final int SHARDS = 2;
+    protected static final PostgreSQLContainer<?> POSTGRES1 = postgreSQLContainer();
+    protected static final PostgreSQLContainer<?> POSTGRES2 = postgreSQLContainer();
     protected static final List<DataSource> dataSources;
     protected static final List<DSLContext> dslContexts;
 
@@ -33,27 +32,9 @@ public abstract class ShardedIntegrationTest {
         POSTGRES2.start();
 
         dataSources = List.of(dataSource(POSTGRES1), dataSource(POSTGRES2));
-        dslContexts = dataSources.stream().map(ds -> DSL.using(ds, SQLDialect.POSTGRES)).toList();
+        dslContexts = dataSources.stream().map(IntegrationTest::dslContext).toList();
 
-        dslContexts.forEach(ctx -> {
-            ctx.execute("""
-                    CREATE TABLE topic (
-                        name TEXT PRIMARY KEY,
-                        partitions SMALLINT NOT NULL,
-                        created_at TIMESTAMP NOT NULL DEFAULT NOW()
-                    );
-                    
-                    CREATE TABLE consumer (
-                        topic TEXT NOT NULL,
-                        name TEXT NOT NULL,
-                        partition SMALLINT NOT NULL,
-                        last_event_id BIGINT,
-                        last_consumption_at TIMESTAMP,
-                        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                        PRIMARY KEY (topic, name, partition)
-                    );
-                    """);
-        });
+        dslContexts.forEach(IntegrationTest::initDbSchema);
     }
 
     private TestClock testClock;
@@ -62,39 +43,10 @@ public abstract class ShardedIntegrationTest {
     protected EventSQLPublisher publisher;
     protected EventSQLConsumers consumers;
     protected EventSQLConsumers.DLTEventFactory dltEventFactory;
-    protected EventRepository eventRepository;
-    protected ConsumerRepository consumerRepository;
-
-    private static DataSource dataSource(PostgreSQLContainer<?> postgres) {
-        var config = new HikariConfig();
-        config.setJdbcUrl(postgres.getJdbcUrl());
-        config.setUsername(postgres.getUsername());
-        config.setPassword(postgres.getPassword());
-        return new HikariDataSource(config);
-    }
+    protected List<? extends EventRepository> eventRepositories;
 
     @BeforeEach
     protected void baseSetup() {
-        dslContexts.forEach(c -> c.execute("""
-                TRUNCATE topic;
-                TRUNCATE consumer;
-                """));
-
-        // hard to clear/drop all partitions, so let's just recreate the table each time
-        dslContexts.forEach(c -> c.execute("""
-                 DROP TABLE IF EXISTS event;
-                 CREATE TABLE event (
-                    topic TEXT NOT NULL,
-                    id BIGSERIAL NOT NULL,
-                    partition SMALLINT NOT NULL,
-                    key TEXT,
-                    value BYTEA NOT NULL,
-                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    metadata JSONB NOT NULL,
-                    PRIMARY KEY (topic, id)
-                ) PARTITION BY LIST(topic);
-                """));
-
         testClock = new TestClock();
         eventSQL = new EventSQL(dataSources, SQLDialect.POSTGRES, testClock);
         registry = eventSQL.registry();
@@ -102,6 +54,11 @@ public abstract class ShardedIntegrationTest {
         consumers = eventSQL.consumers();
 
         dltEventFactory = eventSQL.consumers().dltEventFactory();
+
+        var transactions = dslContexts.stream().map(SqlTransactions::new).toList();
+        eventRepositories = transactions.stream().map(SqlEventRepository::new).toList();
+
+        dslContexts.forEach(ctx -> cleanDb(ctx, registry));
     }
 
     @AfterEach

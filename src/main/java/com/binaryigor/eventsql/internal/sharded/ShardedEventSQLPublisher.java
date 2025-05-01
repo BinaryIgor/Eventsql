@@ -1,4 +1,4 @@
-package com.binaryigor.eventsql.impl.sharded;
+package com.binaryigor.eventsql.internal.sharded;
 
 import com.binaryigor.eventsql.EventPublication;
 import com.binaryigor.eventsql.EventSQLPublisher;

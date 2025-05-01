@@ -1,8 +1,8 @@
-package com.binaryigor.eventsql.impl.sql;
+package com.binaryigor.eventsql.internal.sql;
 
-import com.binaryigor.eventsql.impl.Consumer;
-import com.binaryigor.eventsql.impl.ConsumerId;
-import com.binaryigor.eventsql.impl.ConsumerRepository;
+import com.binaryigor.eventsql.internal.Consumer;
+import com.binaryigor.eventsql.internal.ConsumerId;
+import com.binaryigor.eventsql.internal.ConsumerRepository;
 import org.jooq.Condition;
 import org.jooq.Field;
 import org.jooq.Table;

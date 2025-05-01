@@ -1,4 +1,4 @@
-package com.binaryigor.eventsql.impl;
+package com.binaryigor.eventsql.internal;
 
 import com.binaryigor.eventsql.*;
 import org.slf4j.Logger;
@@ -62,11 +62,8 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
         var topic = findTopicDefinition(topicName);
         var toPublishPublications = publications.stream()
                 .map(publication -> {
+                    validatePublication(publication, topic);
                     if (topic.partitions() == -1) {
-                        if (publication.partition() != -1) {
-                            throw new IllegalArgumentException("%s topic is not partitioned, but publication to %d partition was requested"
-                                    .formatted(topicName, publication.partition()));
-                        }
                         return publication;
                     }
                     return publicationWithAssignedPartition(publication, topic.partitions());
@@ -75,11 +72,20 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
         eventRepository.createAll(toPublishPublications);
     }
 
-    private EventPublication publicationWithAssignedPartition(EventPublication publication, int topicPartitions) {
-        if (publication.partition() > topicPartitions) {
+    private void validatePublication(EventPublication publication, TopicDefinition topic) {
+        if (publication.partition() < -1) {
+            throw new IllegalArgumentException("Illegal partition value: " + publication.partition());
+        } else if (topic.partitions() == -1 && publication.partition() != -1) {
+            throw new IllegalArgumentException("%s topic is not partitioned, but publication to %d partition was requested"
+                    .formatted(topic.name(), publication.partition()));
+            // partitions are number from 0
+        } else if (topic.partitions() > -1 && (publication.partition() + 1) > topic.partitions()) {
             throw new IllegalArgumentException("%s topic has only %d partitions, but publishing to %d was requested"
-                    .formatted(publication.topic(), topicPartitions, publication.partition()));
+                    .formatted(publication.topic(), topic.partitions(), publication.partition()));
         }
+    }
+
+    private EventPublication publicationWithAssignedPartition(EventPublication publication, int topicPartitions) {
         var partition = publication.partition() == -1 ? RANDOM.nextInt(topicPartitions) : publication.partition();
         return publication.withPartition(partition);
     }
@@ -96,14 +102,13 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
 
     @Override
     public void startConsumer(String topic, String name, Consumer<Event> consumer, Duration pollingDelay) {
-        startConsumer(topic, name, consumer, DEFAULT_POLLING_DELAY, DEFAULT_IN_MEMORY_EVENTS);
+        startConsumer(topic, name, consumer, pollingDelay, DEFAULT_IN_MEMORY_EVENTS);
     }
 
     @Override
     public void startConsumer(String topic, String name, Consumer<Event> consumer,
                               Duration pollingDelay, int maxInMemoryEvents) {
         startBatchConsumer(topic, name, new ConsumerWrapper(consumer),
-                // just a few, slight optimization
                 new ConsumptionConfig(1, maxInMemoryEvents, pollingDelay, pollingDelay));
     }
 
@@ -113,7 +118,7 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
     }
 
     // This can change, trigger reload from time to time
-    private List<com.binaryigor.eventsql.impl.Consumer> findPartitionedConsumers(String topic, String name) {
+    private List<com.binaryigor.eventsql.internal.Consumer> findPartitionedConsumers(String topic, String name) {
         var partitionedConsumers = consumerRepository.allOf(topic, name);
         if (partitionedConsumers.isEmpty()) {
             throw new IllegalArgumentException("There are no consumers of %s topic and %s name".formatted(topic, name));
@@ -169,15 +174,15 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
             delayNextPolling = events.size() < consumptionConfig.maxEvents();
         } catch (EventSQLConsumptionException e) {
             var dltEvent = dltEventFactory.create(e, consumerId.name());
-            if (dltEvent.isEmpty()) {
-                logger.error("Problem while consuming event for {} consumer: ", consumerId, e);
-                lastEventId = e.event().id() - 1;
-                delayNextPolling = true;
-            } else {
+            if (dltEvent.isPresent()) {
                 logger.error("Problem while consuming event for {} consumer, publishing it to dlt: ", consumerId, e);
                 lastEventId = e.event().id();
                 publish(dltEvent.get());
                 delayNextPolling = false;
+            } else {
+                logger.error("Problem while consuming event for {} consumer: ", consumerId, e);
+                lastEventId = e.event().id() - 1;
+                delayNextPolling = true;
             }
         }
 
@@ -188,7 +193,7 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
         return delayNextPolling;
     }
 
-    private List<Event> nextEvents(com.binaryigor.eventsql.impl.Consumer consumer, int limit) {
+    private List<Event> nextEvents(com.binaryigor.eventsql.internal.Consumer consumer, int limit) {
         if (consumer.partition() == -1) {
             return eventRepository.nextEvents(consumer.topic(), consumer.lastEventId(), limit);
         }
@@ -196,8 +201,7 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
     }
 
     private boolean shouldWaitForMinEvents(Instant lastConsumptionAt, Duration maxPoolingDelay) {
-        return Duration.between(lastConsumptionAt, clock.instant())
-                .compareTo(maxPoolingDelay) < 0;
+        return Duration.between(lastConsumptionAt, clock.instant()).compareTo(maxPoolingDelay) < 0;
     }
 
     @Override
@@ -208,7 +212,8 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
         for (var c : consumers) {
             var cid = new ConsumerId(c.topic(), c.name(), c.partition());
             if (consumerThreads.containsKey(cid)) {
-                throw new IllegalArgumentException("Consumer %s is registered already!".formatted(cid));
+                logger.info("Consumer {} is registered already, skipping", cid);
+                break;
             }
             consumerThreads.put(cid, Thread.startVirtualThread(() -> consumeEvents(cid, consumer, consumptionConfig)));
         }
@@ -223,7 +228,7 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
             if (latch.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 logger.info("All consumers have stopped gracefully!");
             } else {
-                logger.warn("Some consumers didn't finish in {} ms, exiting in any case", timeout);
+                logger.warn("Some consumers didn't finish in {}, exiting in any case", timeout);
             }
         } catch (Exception e) {
             logger.error("Problem while stopping consumers", e);

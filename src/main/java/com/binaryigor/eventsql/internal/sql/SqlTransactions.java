@@ -1,6 +1,6 @@
-package com.binaryigor.eventsql.impl.sql;
+package com.binaryigor.eventsql.internal.sql;
 
-import com.binaryigor.eventsql.impl.Transactions;
+import com.binaryigor.eventsql.internal.Transactions;
 import org.jooq.DSLContext;
 
 public class SqlTransactions implements Transactions, DslContextProvider {
