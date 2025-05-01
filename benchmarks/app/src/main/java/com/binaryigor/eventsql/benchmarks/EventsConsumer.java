@@ -24,7 +24,7 @@ public class EventsConsumer {
     private final ObjectMapper objectMapper;
     private final AccountCreatedHandler accountCreatedHandler;
     private final EventsProperties eventsProperties;
-    private final AtomicBoolean accountCreatedBatchHandler = new AtomicBoolean(false);
+    private final AtomicBoolean accountCreatedBatchHandler = new AtomicBoolean(true);
 
     public EventsConsumer(EventSQL eventSQL,
                           ObjectMapper objectMapper,
@@ -44,21 +44,22 @@ public class EventsConsumer {
     void start() {
         eventSQL.registry()
                 .registerTopic(eventsProperties.accountCreatedTopic())
-                .registerTopic(eventsProperties.accountCreatedTopicDlt())
-                .registerConsumer(eventsProperties.accountCreatedConsumer());
+                .registerTopic(eventsProperties.accountCreatedTopicDlt());
 
-        var accountCreatedTopic = eventsProperties.accountCreatedTopic().name();
-        var accountCreatedConsumer = eventsProperties.accountCreatedConsumer().name();
-        eventSQL.consumers()
-                .startBatchConsumer(accountCreatedTopic, accountCreatedConsumer,
-                        events -> {
-                            if (accountCreatedBatchHandler.get()) {
-                                handleAccountCreatedEvents(events);
-                            } else {
-                                events.forEach(this::handleAccountCreatedEvent);
-                            }
-                        },
-                        EventSQLConsumers.ConsumptionConfig.of(10, 100));
+        eventsProperties.accountCreatedConsumers()
+                .forEach(c -> {
+                    eventSQL.registry().registerConsumer(c);
+                    eventSQL.consumers()
+                            .startBatchConsumer(c.topic(), c.name(),
+                                    events -> {
+                                        if (accountCreatedBatchHandler.get()) {
+                                            handleAccountCreatedEvents(events);
+                                        } else {
+                                            events.forEach(this::handleAccountCreatedEvent);
+                                        }
+                                    },
+                                    EventSQLConsumers.ConsumptionConfig.of(10, 100));
+                });
     }
 
     @PreDestroy

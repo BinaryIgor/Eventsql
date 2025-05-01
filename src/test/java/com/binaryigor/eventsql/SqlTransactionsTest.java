@@ -1,6 +1,6 @@
 package com.binaryigor.eventsql;
 
-import com.binaryigor.eventsql.impl.sql.SqlTransactions;
+import com.binaryigor.eventsql.internal.sql.SqlTransactions;
 import com.binaryigor.eventsql.test.IntegrationTest;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.Test;

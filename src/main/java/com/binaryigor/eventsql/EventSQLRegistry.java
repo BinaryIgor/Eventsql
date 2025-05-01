@@ -2,7 +2,6 @@ package com.binaryigor.eventsql;
 
 import java.util.List;
 
-// TODO: initSchema method!
 public interface EventSQLRegistry {
 
     EventSQLRegistry registerTopic(TopicDefinition topic);

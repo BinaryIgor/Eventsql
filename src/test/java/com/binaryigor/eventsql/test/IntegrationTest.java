@@ -4,11 +4,11 @@ import com.binaryigor.eventsql.EventSQL;
 import com.binaryigor.eventsql.EventSQLConsumers;
 import com.binaryigor.eventsql.EventSQLPublisher;
 import com.binaryigor.eventsql.EventSQLRegistry;
-import com.binaryigor.eventsql.impl.ConsumerRepository;
-import com.binaryigor.eventsql.impl.EventRepository;
-import com.binaryigor.eventsql.impl.sql.SqlConsumerRepository;
-import com.binaryigor.eventsql.impl.sql.SqlEventRepository;
-import com.binaryigor.eventsql.impl.sql.SqlTransactions;
+import com.binaryigor.eventsql.internal.ConsumerRepository;
+import com.binaryigor.eventsql.internal.EventRepository;
+import com.binaryigor.eventsql.internal.sql.SqlConsumerRepository;
+import com.binaryigor.eventsql.internal.sql.SqlEventRepository;
+import com.binaryigor.eventsql.internal.sql.SqlTransactions;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.jooq.DSLContext;
@@ -24,21 +24,34 @@ import java.time.Duration;
 
 public abstract class IntegrationTest {
 
-    protected static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:16"));
+    protected static final PostgreSQLContainer<?> POSTGRES = postgreSQLContainer();
     protected static final DataSource dataSource;
     protected static final DSLContext dslContext;
 
     static {
         POSTGRES.start();
+        dataSource = dataSource(POSTGRES);
+        dslContext = dslContext(dataSource);
+        initDbSchema(dslContext);
+    }
 
+    static PostgreSQLContainer<?> postgreSQLContainer() {
+        return new PostgreSQLContainer(DockerImageName.parse("postgres:16"));
+    }
+
+    static DataSource dataSource(PostgreSQLContainer<?> postgres) {
         var config = new HikariConfig();
-        config.setJdbcUrl(POSTGRES.getJdbcUrl());
-        config.setUsername(POSTGRES.getUsername());
-        config.setPassword(POSTGRES.getPassword());
-        dataSource = new HikariDataSource(config);
+        config.setJdbcUrl(postgres.getJdbcUrl());
+        config.setUsername(postgres.getUsername());
+        config.setPassword(postgres.getPassword());
+        return new HikariDataSource(config);
+    }
 
-        dslContext = DSL.using(dataSource, SQLDialect.POSTGRES);
+    static DSLContext dslContext(DataSource dataSource) {
+        return DSL.using(dataSource, SQLDialect.POSTGRES);
+    }
 
+    static void initDbSchema(DSLContext dslContext) {
         dslContext.execute("""
                 CREATE TABLE topic (
                     name TEXT PRIMARY KEY,
@@ -58,21 +71,9 @@ public abstract class IntegrationTest {
                 """);
     }
 
-    private TestClock testClock;
-    protected EventSQL eventSQL;
-    protected EventSQLRegistry registry;
-    protected EventSQLPublisher publisher;
-    protected EventSQLConsumers consumers;
-    protected EventSQLConsumers.DLTEventFactory dltEventFactory;
-    protected EventRepository eventRepository;
-    protected ConsumerRepository consumerRepository;
-
-    @BeforeEach
-    protected void baseSetup() {
-        dslContext.execute("""
-                TRUNCATE topic;
-                TRUNCATE consumer;
-                """);
+    static void cleanDb(DSLContext dslContext, EventSQLRegistry registry) {
+        registry.listConsumers().forEach(c -> registry.unregisterConsumer(c.topic(), c.name()));
+        registry.listTopics().forEach(t -> registry.unregisterTopic(t.name()));
 
         // hard to clear/drop all partitions, so let's just recreate the table each time
         dslContext.execute("""
@@ -88,23 +89,40 @@ public abstract class IntegrationTest {
                     PRIMARY KEY (topic, id)
                 ) PARTITION BY LIST(topic);
                 """);
+    }
 
+    protected TestClock testClock;
+    protected EventSQL eventSQL;
+    protected EventSQLRegistry registry;
+    protected EventSQLPublisher publisher;
+    protected EventSQLConsumers consumers;
+    protected EventSQLConsumers.DLTEventFactory dltEventFactory;
+    protected EventRepository eventRepository;
+    protected ConsumerRepository consumerRepository;
+
+    @BeforeEach
+    protected void baseSetup() {
         testClock = new TestClock();
-        eventSQL = new EventSQL(dataSource, SQLDialect.POSTGRES, testClock);
+        eventSQL = newEventSQLInstance();
         registry = eventSQL.registry();
         publisher = eventSQL.publisher();
         consumers = eventSQL.consumers();
 
-        dltEventFactory = eventSQL.configuredDltEventFactory();
+        dltEventFactory = eventSQL.consumers().dltEventFactory();
 
         var transactions = new SqlTransactions(dslContext);
         eventRepository = new SqlEventRepository(transactions);
         consumerRepository = new SqlConsumerRepository(transactions);
+
+        cleanDb(dslContext, registry);
+    }
+
+    protected EventSQL newEventSQLInstance() {
+        return new EventSQL(dataSource, SQLDialect.POSTGRES, testClock);
     }
 
     @AfterEach
     protected void baseTearDown() {
         consumers.stop(Duration.ofSeconds(3));
     }
-
 }

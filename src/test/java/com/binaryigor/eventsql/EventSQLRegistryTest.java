@@ -1,6 +1,6 @@
 package com.binaryigor.eventsql;
 
-import com.binaryigor.eventsql.impl.Consumer;
+import com.binaryigor.eventsql.internal.Consumer;
 import com.binaryigor.eventsql.test.IntegrationTest;
 import com.binaryigor.eventsql.test.TestObjects;
 import org.junit.jupiter.api.Test;
