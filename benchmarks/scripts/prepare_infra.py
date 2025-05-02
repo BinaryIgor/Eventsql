@@ -27,7 +27,7 @@ def print_and_exit(message):
 DIGITAL_OCEAN_URL = "https://api.digitalocean.com/v2"
 
 VPC_NAME = "eventsql-benchmarks-vpc"
-CONSUMER_MACHINE_NAME = "eventsql-bechmarks-consumer-machine"
+CONSUMER_MACHINE_NAME = "eventsql-benchmarks-consumer-machine"
 DB_MACHINE_INSTANCES = int(environ.get("DB_MACHINE_INSTANCES", "3"))
 db_machine_names = [f"eventsql-benchmarks-db-machine-{i}" for i in range(DB_MACHINE_INSTANCES)]
 FIREWALL_NAME = "eventsql-benchmarks-firewall"
