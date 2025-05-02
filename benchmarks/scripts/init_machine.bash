@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Create user and setup passwordless sudo to simplify admin tasks
+# Create user and set up passwordless sudo to simplify admin tasks
 useradd --create-home --shell "/bin/bash" --groups sudo "_user_placeholder_"
 echo "_user_placeholder_ ALL=(ALL) NOPASSWD: ALL" | EDITOR='tee -a' visudo
 
@@ -21,24 +21,24 @@ sed --in-place 's/^KerberosAuthentication.*/KerberosAuthentication no/g' /etc/ss
 sed --in-place 's/^GSSAPIAuthentication.*/GSSAPIAuthentication no/g' /etc/ssh/sshd_config
 if sshd -t -q; then systemctl restart ssh; fi
 
-# Install docker & allow non sudo access
+# Install docker & allow non-sudo access
 apt-get update
 apt-get install ca-certificates curl
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
 chmod a+r /etc/apt/keyrings/docker.asc
 
-# Add the repository to Apt sources:
+# Add the repository to apt sources:
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
   $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update
 
-# Finally, install Docker:
+# Finally, install docker:
 apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
 
-# Allow non root access to a docker
+# Allow non-root access to docker
 usermod -aG docker _user_placeholder_
 # limit docker logs size
 echo '{

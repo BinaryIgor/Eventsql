@@ -4,7 +4,7 @@ Events over SQL.
 
 Simple, Reliable, Fast.
 
-Able to publish and consume thousands of events per second on a single PostgreSQL instance.
+Able to publish and consume thousands of events per second on a single Postgres instance.
 
 With sharding, it can easily support tens of thousands events per second for virtually endless scalability.
 
@@ -92,3 +92,8 @@ It's a rather acceptable tradeoff and easy to enforce at the library level.
 ## How to use it
 
 TODO: for now, check out benchmarks/app being an example app.
+
+
+## How to get it
+
+TODO
