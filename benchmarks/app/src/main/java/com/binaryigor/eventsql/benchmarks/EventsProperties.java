@@ -12,6 +12,6 @@ public record EventsProperties(TopicDefinition accountCreatedTopic,
                                List<ConsumerDefinition> accountCreatedConsumers,
                                List<DataSourceProperties> dataSources) {
 
-    record DataSourceProperties(String url, String username, String password, int connections) {
+    record DataSourceProperties(String url, String username, String password, int connections, boolean enabled) {
     }
 }

@@ -26,6 +26,10 @@ public class EventSQL {
     private final EventSQLPublisher publisher;
     private final EventSQLConsumers consumers;
 
+    public EventSQL(DataSource dataSource, SQLDialect sqlDialect) {
+        this(dataSource, sqlDialect, Clock.systemUTC(), Optional.empty());
+    }
+
     public EventSQL(DataSource dataSource, SQLDialect sqlDialect, Clock clock) {
         this(dataSource, sqlDialect, clock, Optional.empty());
     }
@@ -35,6 +39,10 @@ public class EventSQL {
                     Clock clock,
                     Optional<EventSQLConsumers.DLTEventFactory> dltEventFactory) {
         this(List.of(dataSource), sqlDialect, clock, dltEventFactory);
+    }
+
+    public EventSQL(Collection<DataSource> dataSources, SQLDialect sqlDialect) {
+        this(dataSources, sqlDialect, Clock.systemUTC(), Optional.empty());
     }
 
     public EventSQL(Collection<DataSource> dataSources,

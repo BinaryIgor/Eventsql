@@ -26,10 +26,15 @@ public class EventSQLBenchmarksRunner {
     static final String DB_PASSWORD = envValueOrDefault("DB_PASSWORD", "events");
     static final int DATA_SOURCE_POOL_SIZE = envIntValueOrDefault("DATA_SOURCE_POOL_SIZE", 25);
     static final SQLDialect SQL_DIALECT = SQLDialect.valueOf(envValueOrDefault("SQL_DIALECT", "POSTGRES"));
+    static final int RUNNER_INSTANCES = envIntValueOrDefault("RUNNER_INSTANCES", 1);
     static final int EVENTS_TO_PUBLISH = envIntValueOrDefault("EVENTS_TO_PUBLISH", 10_000);
-    static final int EVENTS_RATE = envIntValueOrDefault("EVENTS_RATE", 500);
+    static final int EVENTS_RATE = envIntValueOrDefault("EVENTS_RATE", 1000);
     static final String TEST_TOPIC = envValueOrDefault("TEST_TOPIC", "account_created");
-    static final String TEST_CONSUMER = envValueOrDefault("TEST_CONSUMER", "test-consumer");
+    static final String TEST_CONSUMER = envValueOrDefault("TEST_CONSUMER", "benchmarks-consumer");
+
+    static {
+        System.setProperty("org.slf4j.simpleLogger.logFile", "System.out");
+    }
 
     public static void main(String[] args) throws Exception {
         System.out.println("Starting EventSQL benchmark, connecting to events db...");
@@ -41,8 +46,15 @@ public class EventSQLBenchmarksRunner {
         printDelimiter();
 
         System.out.printf("Connection established, about to publish %d events to %s topic with %s per second rate%n", EVENTS_TO_PUBLISH, TEST_TOPIC, EVENTS_RATE);
-        var topicDefinition = topicDefinition(eventSQL, TEST_TOPIC);
-        var consumerDefinition = consumerDefinition(eventSQL, TEST_TOPIC, TEST_CONSUMER);
+        if (RUNNER_INSTANCES > 1) {
+            printDelimiter();
+            System.out.printf("%d runner instances are running in parallel, so the real rate will be %d per second for %d events%n",
+                    RUNNER_INSTANCES, RUNNER_INSTANCES * EVENTS_RATE, RUNNER_INSTANCES * EVENTS_TO_PUBLISH);
+            printDelimiter();
+        }
+        var topicDefinition = topicDefinition(eventSQL);
+        var consumerDefinition = consumerDefinition(eventSQL);
+        printDelimiter();
         System.out.println("TopicDefinition: " + topicDefinition);
         System.out.println("ConsumerDefinition: " + consumerDefinition);
         printDelimiter();
@@ -52,16 +64,29 @@ public class EventSQLBenchmarksRunner {
         publishEvents(eventSQL.publisher(), topicDefinition);
         var publicationDuration = Duration.ofMillis(System.currentTimeMillis() - start);
 
+        printDelimiter();
+        var publicationPerSecondRate = perSecondRate(publicationDuration);
         System.out.printf("Publishing %d events with %d per second rate took: %s, which means %d per second rate%n",
-                EVENTS_TO_PUBLISH, EVENTS_RATE, publicationDuration, perSecondRate(publicationDuration));
+                EVENTS_TO_PUBLISH, EVENTS_RATE, publicationDuration, publicationPerSecondRate);
+        if (RUNNER_INSTANCES > 1) {
+            System.out.printf("%d runner instances were running in parallel, so the real rate was %d per second for %d events%n",
+                    RUNNER_INSTANCES, RUNNER_INSTANCES * publicationPerSecondRate, RUNNER_INSTANCES * EVENTS_TO_PUBLISH);
+        }
+        printDelimiter();
         System.out.println("Waiting for consumption....");
         printDelimiter();
 
         waitForConsumers(dataSource, consumerDefinition);
         var consumptionDuration = Duration.ofMillis(System.currentTimeMillis() - start);
 
-        System.out.printf("Consuming %d events with %d per second rate took: %s, which means %d per second rate",
-                EVENTS_TO_PUBLISH, EVENTS_RATE, consumptionDuration, perSecondRate(consumptionDuration));
+        printDelimiter();
+        var consumptionPerSecondRate = perSecondRate(consumptionDuration);
+        System.out.printf("Consuming %d events with %d per second rate took: %s, which means %d per second rate%n",
+                EVENTS_TO_PUBLISH, EVENTS_RATE, consumptionDuration, consumptionPerSecondRate);
+        if (RUNNER_INSTANCES > 1) {
+            System.out.printf("%d runner instances were running in parallel, so the real rate was %d per second for %d events%n",
+                    RUNNER_INSTANCES, RUNNER_INSTANCES * consumptionPerSecondRate, RUNNER_INSTANCES * EVENTS_TO_PUBLISH);
+        }
         printDelimiter();
     }
 
@@ -76,10 +101,6 @@ public class EventSQLBenchmarksRunner {
 
     static int envIntValueOrDefault(String key, int defaultValue) {
         return Integer.parseInt(envValueOrDefault(key, String.valueOf(defaultValue)));
-    }
-
-    static int envIntValueOrThrow(String key) {
-        return Integer.parseInt(envValueOrThrow(key));
     }
 
     static void printDelimiter() {
@@ -98,16 +119,16 @@ public class EventSQLBenchmarksRunner {
         return new HikariDataSource(config);
     }
 
-    static TopicDefinition topicDefinition(EventSQL eventSQL, String topic) {
+    static TopicDefinition topicDefinition(EventSQL eventSQL) {
         return eventSQL.registry().listTopics().stream()
-                .filter(t -> t.name().equals(topic))
+                .filter(t -> t.name().equals(TEST_TOPIC))
                 .findFirst()
                 .orElseThrow();
     }
 
-    static ConsumerDefinition consumerDefinition(EventSQL eventSQL, String topic, String consumer) {
+    static ConsumerDefinition consumerDefinition(EventSQL eventSQL) {
         return eventSQL.registry().listConsumers().stream()
-                .filter(c -> c.topic().equals(topic) && c.name().equals(consumer))
+                .filter(c -> c.topic().equals(TEST_TOPIC) && c.name().equals(TEST_CONSUMER))
                 .findFirst()
                 .orElseThrow();
     }
@@ -220,7 +241,6 @@ public class EventSQLBenchmarksRunner {
 
     static void waitForConsumers(DataSource dataSource, ConsumerDefinition consumerDefinition) throws Exception {
         var eventsStats = eventTableStats(dataSource);
-
         while (true) {
             var consumersStats = consumerTableStats(dataSource);
             var consumersFinished = false;
@@ -233,14 +253,14 @@ public class EventSQLBenchmarksRunner {
                     var lastEventId = eventsStats.lastIdsPerPartition().get(consumerPartition);
                     if (lastConsumerEventId == null || lastEventId > lastConsumerEventId) {
                         consumersFinished = false;
-                        System.out.printf("Consumer of %d partition is at the event %d, but latest event is: %d; waiting for 1s...%n", consumerPartition, lastConsumerEventId, lastEventId);
+                        System.out.printf("Consumer of %d partition is at the event %d, but latest event is %d; waiting for 1s...%n", consumerPartition, lastConsumerEventId, lastEventId);
                         break;
                     }
                 }
             } else {
                 var lastConsumerEventId = consumersStats.lastIdsPerPartition().get(-1);
                 consumersFinished = lastConsumerEventId >= eventsStats.lastId();
-                System.out.printf("Consumer is at %d event, but latest event is: %d; waiting for 1s...%n", lastConsumerEventId, eventsStats.lastId());
+                System.out.printf("Consumer is at %d event, but latest event is %d; waiting for 1s...%n", lastConsumerEventId, eventsStats.lastId());
             }
 
             if (consumersFinished) {
