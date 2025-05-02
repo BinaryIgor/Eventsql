@@ -7,3 +7,4 @@
 * more elaborate definitions change support - especially around partitions growth & shrinkage
 * JavaDocs
 * Support schemas init in registry - why require schemas from users, if it is always the same?
+* using JOOQ tradeoffs?

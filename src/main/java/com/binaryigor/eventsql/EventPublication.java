@@ -8,6 +8,10 @@ public record EventPublication(String topic,
                                byte[] value,
                                Map<String, String> metadata) {
 
+    public EventPublication(String topic, int partition, String key, byte[] value) {
+        this(topic, partition, key, value, Map.of());
+    }
+
     public EventPublication(String topic, int partition, byte[] value, Map<String, String> metadata) {
         this(topic, partition, null, value, metadata);
     }
