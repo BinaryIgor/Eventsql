@@ -11,4 +11,8 @@ public interface EventSQLPublisher {
     void configurePartitioner(Partitioner partitioner);
 
     Partitioner partitioner();
+
+    interface Partitioner {
+        int partition(EventPublication publication, int topicPartitions);
+    }
 }

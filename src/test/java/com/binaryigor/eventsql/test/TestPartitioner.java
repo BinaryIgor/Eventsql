@@ -1,9 +1,9 @@
 package com.binaryigor.eventsql.test;
 
 import com.binaryigor.eventsql.EventPublication;
-import com.binaryigor.eventsql.Partitioner;
+import com.binaryigor.eventsql.EventSQLPublisher;
 
-public class TestPartitioner implements Partitioner {
+public class TestPartitioner implements EventSQLPublisher.Partitioner {
 
     private final int nextPartition;
 

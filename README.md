@@ -54,7 +54,7 @@ FOR UPDATE SKIP LOCKED;
 
 SELECT * FROM event
 WHERE topic = :topic AND (:last_event_id IS NULL OR id > :last_event_id)
-ORDER BY id LIMIT N;
+ORDER BY id LIMIT :limit;
 
 (process events)
 
@@ -62,13 +62,15 @@ UPDATE consumer
 SET last_event_id = :id,
     last_consumption_at = :now 
 WHERE topic = :topic AND name = :c_name;
+
+COMMIT;
 ```
 
 Optionally, to increase throughput & concurrency, we might have a partitioned topic and consumers (-1 partition standing
-for not partitioned topic/consumer).
+for not partitioned topic/consumer/event).
 
-Distribution of partitioned events is a sole responsibility of publisher - the library provides sensible default (random
-distribution).
+Distribution of partitioned events is the sole responsibility of the publisher.
+
 Consumption of such events per partition (0 in an example) might look like this:
 
 ```sql
@@ -80,7 +82,7 @@ FOR UPDATE SKIP LOCKED;
 
 SELECT * FROM event
 WHERE topic = :topic AND partition = 0 AND (:last_event_id IS NULL OR id > :last_event_id)
-ORDER BY id LIMIT N;
+ORDER BY id LIMIT :limit;
 
 (process events)
 
@@ -88,11 +90,12 @@ UPDATE consumer
 SET last_event_id = :id,
     last_consumption_at = :now
 WHERE topic = :topic AND name = :c_name AND partition = 0;
+
+COMMIT;
 ```
 
-Limitation being that if consumer is partitioned, it must have the exact same number of partition as in the topic
-definition.
-It's a rather acceptable tradeoff and easy to enforce at the library level.
+Limitation being that if consumer is partitioned, it must have the exact same number of partition as the topic
+definition has. It's a rather acceptable tradeoff and easy to enforce at the library level.
 
 ## How to use it
 
@@ -104,7 +107,8 @@ them:
 import com.binaryigor.eventsql.EventSQL;
 import javax.sql.DataSource;
 // dialect of your events backend - POSTGRES, MYSQL, MARIADB and so on;
-// as of now, only POSTGRES has fully tested support
+// as of now, only POSTGRES has fully tested support;
+// should also work with others but some things - event table partition management for example - works only with Postgres, for others it must be managed manually
 import org.jooq.SQLDialect;
 
 var eventSQL = new EventSQL(dataSource, SQLDialect.POSTGRES);
@@ -128,24 +132,24 @@ eventSQL.registry()
   .registerConsumer(new ConsumerDefinition("invoice_issued", "consumer-2", true));
 ```
 
-Topics and consumers can be both partitioned and not partitioned (-1 stands for not partitioned).
+Topics and consumers can be both partitioned and not partitioned.
 **Partitioned topics allow to have partitioned consumers, increasing parallelism.**
 Parallelism of partitioned consumers is as high as consumed topic number of partitions - events have ordering guarantee within a partition.
 As a consequence, for a given consumer, each partition can be processed only by a single thread at the time.
 
-For a consumer to be partitioned (third argument in the example) its topic must be partitioned as well - it will have the same number of partitions.
-The opposite does not have to be true - consumer might not be partitioned but related topic can;
-it has performance implications though, since as described above, consumer parallelism is capped at its number of partitions.
+For a consumer to be partitioned its topic must be partitioned as well - it will have the same number of partitions. 
+The opposite does not have to be true - consumer might not be partitioned but a related topic can; it has performance implications though, since as described above, consumer parallelism is capped at its number of partitions.
 
-**For sharding, partitions are multiplied by the number of shards.**
+**With sharding, partitions are multiplied by the number of shards (db instances).**
 
-For example, if we have *3 shards and a topic with 10 partitions - each shard will host 10 partitions, giving 30 partitions in total*.
+For example, if we have *3 shards (3 dbs) and a topic with 10 partitions - each shard (db) will host 10 partitions, giving 30 partitions in total*.
 Same with consumers of a sharded topic - they will be all multiplied by the number of shards.
 
-For events, it works differently - in the example above, *each shard will host ~ 33% (1/3) of the topic events data*.
+For events, it works differently - in the example above, *each shard will host ~ 33% (1/3) of the topic events data* (assuming even partition distribution).
+To get all events, we must read them from all shards.
 
 There will be *30 consumer instances* in this particular case - `3 shards * 10 partitions`; each consuming from one partition hosted on a given shard.
-Each event will be published to a one partition of a single shard - events are unique globally, across all shards.
+Each event will be published to a one partition of a single shard - as a consequence, events are unique globally, across all shards.
 
 ### Publishing
 
@@ -153,10 +157,9 @@ We can publish single events and batches of arbitrary data and type:
 ```java
 var publisher = eventSQL.publisher();
 
-// with - 1 argument, if topic is partitioned, it will be published to a random partition
-publisher.publish(new EventPublication("txt_topic", -1, "txt event".getBytes(StandardCharsets.UTF_8)));
-publisher.publish(new EventPublication("raw_topic", 1, new byte[]{1, 2, 3}));
-publisher.publish(new EventPublication("json_topic", 2,
+publisher.publish(new EventPublication("txt_topic", "txt event".getBytes(StandardCharsets.UTF_8)));
+publisher.publish(new EventPublication("raw_topic", new byte[]{1, 2, 3}));
+publisher.publish(new EventPublication("json_topic",
   """
   {
     "id": 2,
@@ -164,19 +167,52 @@ publisher.publish(new EventPublication("json_topic", 2,
   }
   """.getBytes(StandardCharsets.UTF_8)));
 
-// events can have keys and metadata as well
-publisher.publish(new EventPublication("txt_topic", -1,
+// events can have keys and metadata as well;
+// key determines event distribution - if it's null, partition is randomly assigned      
+publisher.publish(new EventPublication("txt_topic",
   "event-key",
   "txt event".getBytes(StandardCharsets.UTF_8),
   Map.of("some-tag", "some-meta-info")));
 
 
-// events can be published in batches, for improved throughput
+// events can be also published in batches, for improved throughput
 publisher.publishAll(List.of(
-  new EventPublication("txt_topic", -1, "txt event 1".getBytes(StandardCharsets.UTF_8)),
-  new EventPublication("txt_topic", -1, "txt event 2".getBytes(StandardCharsets.UTF_8)),
-  new EventPublication("txt_topic", -1, "txt event 3".getBytes(StandardCharsets.UTF_8))));
+  new EventPublication("txt_topic", "txt event 1".getBytes(StandardCharsets.UTF_8)),
+  new EventPublication("txt_topic", "txt event 2".getBytes(StandardCharsets.UTF_8)),
+  new EventPublication("txt_topic", "txt event 3".getBytes(StandardCharsets.UTF_8))));
 ```
+
+### Partitioner
+
+Event partition is determined by `EventSQLPublisher.Partitioner`. By default, the following implementation is used:
+```java
+public class DefaultPartitioner implements EventSQLPublisher.Partitioner {
+
+  private static final Random RANDOM = new Random();
+
+  @Override
+  public int partition(EventPublication publication, int topicPartitions) {
+    if (topicPartitions == -1) {
+      return -1;
+    }
+    if (publication.key() == null) {
+      return RANDOM.nextInt(topicPartitions);
+    }
+
+    return keyHash(publication.key())
+             .mod(BigInteger.valueOf(topicPartitions))
+             .intValue();
+  }
+    
+  ...
+```
+
+For a not partitioned topic, no partition is assigned.
+
+If the topic is partitioned and has a null key - partition is random. 
+If a key is defined, the partition is assigned based on key hash. Thanks to this, we have a guarantee that events associated with the same key always land in the same partition.
+
+If you want to change this behavior, you can provide your own implementation and configure it by calling `EventSQLPublisher.configurePartitioner` method.
 
 ### Consuming
 
@@ -184,16 +220,16 @@ We can have both single event and batch consumers:
 ```java
 var consumers = eventSQL.consumers();
 
-consumers.startConsumer("txt_topic", "single-consumer", (Event e) -> {
+consumers.startConsumer("txt_topic", "single-consumer", event -> {
   // handle single event
 });
 // with more frequent polling - by default it is 1 second
-consumers.startConsumer("txt_topic", "single-consumer-customized", (Event e) -> {
+consumers.startConsumer("txt_topic", "single-consumer-customized", event -> {
   // handle single event
 }, Duration.ofMillis(100));
 
-consumers.startBatchConsumer("txt_topic", "batch-consumer", (List<Event> events) -> {
-  // handle events batch
+consumers.startBatchConsumer("txt_topic", "batch-consumer", events -> {
+  // handle events batch for better performance
 }, // customize batch behavior:
   // minEvents, maxEvents,
   // pollingDelay and maxPollingDelay - how long to wait for minEvents
@@ -203,15 +239,15 @@ consumers.startBatchConsumer("txt_topic", "batch-consumer", (List<Event> events)
 
 ### Dead Letter Topics (DLT)
 
-If we register a topic with the DLT as follows:
+If we register a topic with DLT as follows:
 ```java
 eventSQL.registry()
   .registerTopic(new TopicDefinition("account_created", -1))
   .registerTopic(new TopicDefinition("account_created_dlt", -1));
 ```
-Under certain circumstances, it will have special treatment.
+Under certain circumstances, it will get a special treatment.
 
-When a consumer throws `EventSQLConsumptionException`, `DefaultDLTEventFactory` takes it over and publishes failed event to the associated dlt if it can find one:
+When a consumer throws `EventSQLConsumptionException`, `DefaultDLTEventFactory` takes over and publishes failed event to the associated DLT, if it can find one:
 ```java
 ...
 
@@ -230,11 +266,11 @@ public Optional<EventPublication> create(EventSQLConsumptionException exception,
   // creates dlt event    
 ```
 
-This factory can be customized by using another `EventSQL` constructor or by calling `EventSQLConsumers.configureDLTEventFactory` method.
+This factory can be customized by calling `EventSQLConsumers.configureDLTEventFactory` method.
 
-What is also worth noting is that any exception thrown by single event consumer is wrapped into `EventSQLConsumptionException` automatically - see *ConsumerWrapper.class*.
+What is also worth noting is that any exception thrown by a single event consumer is wrapped into `EventSQLConsumptionException` automatically - see `ConsumerWrapper` class.
 
-When you use `consumers.startBatchConsumer` you have to do wrapping yourself.
+When you use `EventSQLConsumers.startBatchConsumer` you have to do the wrapping yourself.
 
 
 ## How to get it

@@ -2,7 +2,6 @@ package com.binaryigor.eventsql.internal.sharded;
 
 import com.binaryigor.eventsql.EventPublication;
 import com.binaryigor.eventsql.EventSQLPublisher;
-import com.binaryigor.eventsql.Partitioner;
 
 import java.util.Collection;
 import java.util.List;

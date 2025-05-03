@@ -13,17 +13,38 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 
 public class EventSQLPublisherTest extends IntegrationTest {
 
     private static final String PARTITIONED_TOPIC = "partitioned_topic";
+    private static final int TOPIC_PARTITIONS = 3;
     private static final String NOT_PARTITIONED_TOPIC = "not_partitioned_topic";
 
     @BeforeEach
     void setup() {
-        registry.registerTopic(new TopicDefinition(PARTITIONED_TOPIC, 3))
+        registry.registerTopic(new TopicDefinition(PARTITIONED_TOPIC, TOPIC_PARTITIONS))
                 .registerTopic(new TopicDefinition(NOT_PARTITIONED_TOPIC, -1));
+    }
+
+    @Test
+    void publishesToAssignedByPartitionerPartitions() {
+        // given
+        var events = IntStream.range(0, 5)
+                .mapToObj(idx -> TestObjects.randomEventPublication(PARTITIONED_TOPIC, "key" + idx))
+                .toList();
+
+        // when
+        events.forEach(publisher::publish);
+
+        // then
+        var expectedKeyPartitions = events.stream()
+                .map(e -> tuple(e.key(), publisher.partitioner().partition(e, TOPIC_PARTITIONS)))
+                .toList();
+        assertThat(publishedEvents())
+                .extracting("key", "partition")
+                .containsExactlyElementsOf(expectedKeyPartitions);
     }
 
     @Test

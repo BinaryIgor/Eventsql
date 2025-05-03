@@ -1,14 +1,14 @@
 package com.binaryigor.eventsql.internal;
 
 import com.binaryigor.eventsql.EventPublication;
-import com.binaryigor.eventsql.Partitioner;
+import com.binaryigor.eventsql.EventSQLPublisher;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Random;
 
-public class DefaultPartitioner implements Partitioner {
+public class DefaultPartitioner implements EventSQLPublisher.Partitioner {
 
     private static final Random RANDOM = new Random();
 
