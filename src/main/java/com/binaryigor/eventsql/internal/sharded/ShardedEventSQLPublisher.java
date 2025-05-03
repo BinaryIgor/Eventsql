@@ -29,4 +29,18 @@ public class ShardedEventSQLPublisher implements EventSQLPublisher {
     public void publishAll(Collection<EventPublication> publications) {
         nextPublisher().publishAll(publications);
     }
+
+    @Override
+    public void configurePartitioner(Partitioner partitioner) {
+        publishers.forEach(p -> p.configurePartitioner(partitioner));
+    }
+
+    @Override
+    public Partitioner partitioner() {
+        return publishers.getFirst().partitioner();
+    }
+
+    public List<EventSQLPublisher> publishers() {
+        return publishers;
+    }
 }

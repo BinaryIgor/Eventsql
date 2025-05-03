@@ -61,7 +61,7 @@ public class EventSQLBenchmarksRunner {
 
         var start = System.currentTimeMillis();
 
-        publishEvents(eventSQL.publisher(), topicDefinition);
+        publishEvents(eventSQL.publisher());
         var publicationDuration = Duration.ofMillis(System.currentTimeMillis() - start);
 
         printDelimiter();
@@ -92,11 +92,6 @@ public class EventSQLBenchmarksRunner {
 
     static String envValueOrDefault(String key, String defaultValue) {
         return System.getenv().getOrDefault(key, defaultValue);
-    }
-
-    static String envValueOrThrow(String key) {
-        return Optional.ofNullable(System.getenv().get(key))
-                .orElseThrow(() -> new RuntimeException("%s env variable is required but was not supplied!".formatted(key)));
     }
 
     static int envIntValueOrDefault(String key, int defaultValue) {
@@ -173,12 +168,12 @@ public class EventSQLBenchmarksRunner {
         }
     }
 
-    static void publishEvents(EventSQLPublisher publisher, TopicDefinition topicDefinition) throws Exception {
+    static void publishEvents(EventSQLPublisher publisher) throws Exception {
         var futures = new LinkedList<Future<?>>();
 
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             for (var i = 0; i < EVENTS_TO_PUBLISH; i++) {
-                var result = executor.submit(() -> publishRandomEvent(publisher, topicDefinition));
+                var result = executor.submit(() -> publishRandomEvent(publisher));
                 futures.add(result);
 
                 var publications = i + 1;
@@ -198,20 +193,18 @@ public class EventSQLBenchmarksRunner {
         }
     }
 
-    static void publishRandomEvent(EventSQLPublisher publisher, TopicDefinition topicDefinition) {
+    static void publishRandomEvent(EventSQLPublisher publisher) {
         try {
             // make publication more evenly distributed in time
             Thread.sleep(RANDOM.nextInt(1000));
-            var partition = RANDOM.nextInt(topicDefinition.partitions());
-            var event = nextEvent(partition);
-            publisher.publish(event);
+            publisher.publish(nextEvent());
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    static EventPublication nextEvent(int partition) {
-        return new EventPublication(TEST_TOPIC, partition, accountCreatedEventJson().getBytes(StandardCharsets.UTF_8));
+    static EventPublication nextEvent() {
+        return new EventPublication(TEST_TOPIC, accountCreatedEventJson().getBytes(StandardCharsets.UTF_8));
     }
 
     static String accountCreatedEventJson() {

@@ -10,7 +10,6 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -23,7 +22,6 @@ import java.util.stream.Collectors;
 public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
 
     private static final Logger logger = LoggerFactory.getLogger(EventSQLOps.class);
-    private static final Random RANDOM = new Random();
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final TopicDefinitionsCache topicDefinitionsCache;
     private final Transactions transactions;
@@ -31,6 +29,7 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
     private final EventRepository eventRepository;
     private final Clock clock;
     private final Map<ConsumerId, Thread> consumerThreads = new ConcurrentHashMap<>();
+    private Partitioner partitioner;
     private DLTEventFactory dltEventFactory;
 
     public EventSQLOps(TopicDefinitionsCache topicDefinitionsCache,
@@ -43,6 +42,7 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
         this.consumerRepository = consumerRepository;
         this.eventRepository = eventRepository;
         this.clock = clock;
+        this.partitioner = new DefaultPartitioner();
         this.dltEventFactory = new DefaultDLTEventFactory(topicDefinitionsCache);
     }
 
@@ -60,39 +60,43 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
 
     private void publish(String topicName, Collection<EventPublication> publications) {
         var topic = findTopicDefinition(topicName);
-        var toPublishPublications = publications.stream()
+        var toCreateEvents = publications.stream()
                 .map(publication -> {
-                    validatePublication(publication, topic);
-                    if (topic.partitions() == -1) {
-                        return publication;
-                    }
-                    return publicationWithAssignedPartition(publication, topic.partitions());
+                    var partition = (short) partitioner.partition(publication, topic.partitions());
+                    var eventInput = new EventInput(publication, partition);
+                    validateNewEvent(eventInput, topic);
+                    return eventInput;
                 })
                 .toList();
-        eventRepository.createAll(toPublishPublications);
+        eventRepository.createAll(toCreateEvents);
     }
 
-    private void validatePublication(EventPublication publication, TopicDefinition topic) {
+    private void validateNewEvent(EventInput publication, TopicDefinition topic) {
         if (publication.partition() < -1) {
             throw new IllegalArgumentException("Illegal partition value: " + publication.partition());
         } else if (topic.partitions() == -1 && publication.partition() != -1) {
             throw new IllegalArgumentException("%s topic is not partitioned, but publication to %d partition was requested"
                     .formatted(topic.name(), publication.partition()));
-            // partitions are number from 0
+            // partitions are numbered from 0
         } else if (topic.partitions() > -1 && (publication.partition() + 1) > topic.partitions()) {
             throw new IllegalArgumentException("%s topic has only %d partitions, but publishing to %d was requested"
-                    .formatted(publication.topic(), topic.partitions(), publication.partition()));
+                    .formatted(topic.name(), topic.partitions(), publication.partition()));
         }
-    }
-
-    private EventPublication publicationWithAssignedPartition(EventPublication publication, int topicPartitions) {
-        var partition = publication.partition() == -1 ? RANDOM.nextInt(topicPartitions) : publication.partition();
-        return publication.withPartition(partition);
     }
 
     private TopicDefinition findTopicDefinition(String name) {
         return topicDefinitionsCache.getLoadingIf(name)
                 .orElseThrow(() -> new IllegalArgumentException("topic of %s name doesn't exist".formatted(name)));
+    }
+
+    @Override
+    public void configurePartitioner(Partitioner partitioner) {
+        this.partitioner = partitioner;
+    }
+
+    @Override
+    public Partitioner partitioner() {
+        return partitioner;
     }
 
     @Override

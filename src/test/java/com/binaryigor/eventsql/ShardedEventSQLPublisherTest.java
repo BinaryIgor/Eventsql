@@ -2,10 +2,12 @@ package com.binaryigor.eventsql;
 
 import com.binaryigor.eventsql.test.ShardedIntegrationTest;
 import com.binaryigor.eventsql.test.TestObjects;
+import com.binaryigor.eventsql.test.TestPartitioner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -22,49 +24,60 @@ public class ShardedEventSQLPublisherTest extends ShardedIntegrationTest {
     }
 
     @Test
-    void publishesToRandomPartitionToAllShards() {
+    void publishesToAllShards() {
         // when
-        IntStream.range(0, 50)
-                .forEach($ -> publisher.publish(TestObjects.randomEventPublication(PARTITIONED_TOPIC, -1)));
+        var toPublishEvents = 50;
+        IntStream.range(0, toPublishEvents)
+                .forEach($ -> publisher.publish(TestObjects.randomEventPublication(PARTITIONED_TOPIC)));
 
         // then
+        var allPublishedEvents = new AtomicInteger();
         assertOnEachShard(shard -> {
-            var publishedEvents = publishedEvents(PARTITIONED_TOPIC, shard);
-            assertThat(publishedEvents)
-                    .extracting("partition")
-                    .contains(0, 1, 2);
+            var publishedEvents = publishedEvents(shard);
+            assertThat(publishedEvents).isNotEmpty();
+            allPublishedEvents.addAndGet(publishedEvents.size());
         });
-    }
-
-    @Test
-    void publishesToSpecifiedPartitionToAllShards() {
-        // when
-        IntStream.range(0, 10)
-                .forEach($ -> publisher.publish(TestObjects.randomEventPublication(PARTITIONED_TOPIC, 1)));
-
-        // then
-        assertOnEachShard(shard -> assertThat(publishedEvents(PARTITIONED_TOPIC, shard))
-                .extracting("partition")
-                .containsOnly(1));
+        assertThat(allPublishedEvents.get())
+                .isEqualTo(toPublishEvents);
     }
 
     @Test
     void publishesBatchesToAllShards() {
         // when
+        var batchSize = 5;
+        var toPublishEvents = batchSize * 10;
         IntStream.range(0, 10)
                 .forEach($ -> {
-                    var batch = Stream.generate(() -> TestObjects.randomEventPublication(PARTITIONED_TOPIC, 1))
-                            .limit(5)
+                    var batch = Stream.generate(() -> TestObjects.randomEventPublication(PARTITIONED_TOPIC))
+                            .limit(batchSize)
                             .toList();
                     publisher.publishAll(batch);
                 });
 
         // then
+        var allPublishedEvents = new AtomicInteger();
         assertOnEachShard(shard -> {
-            assertThat(publishedEvents(PARTITIONED_TOPIC, shard))
-                    .extracting("partition")
-                    .containsOnly(1);
+            var publishedEvents = publishedEvents(shard);
+            assertThat(publishedEvents).isNotEmpty();
+            allPublishedEvents.addAndGet(publishedEvents.size());
         });
+        assertThat(allPublishedEvents.get())
+                .isEqualTo(toPublishEvents);
+    }
+
+    @Test
+    void configuresPartitionerForAllShardPublishers() {
+        // given
+        var shardPublishers = publisher.publishers();
+
+        // when
+        var configuredPartitioner = new TestPartitioner(0);
+        publisher.configurePartitioner(configuredPartitioner);
+
+        // then
+        shardPublishers.forEach(p ->
+                assertThat(p.partitioner())
+                        .isEqualTo(configuredPartitioner));
     }
 
     private void assertOnEachShard(Consumer<Integer> shardAssertion) {
@@ -72,7 +85,7 @@ public class ShardedEventSQLPublisherTest extends ShardedIntegrationTest {
                 .forEach(shardAssertion::accept);
     }
 
-    private List<Event> publishedEvents(String topic, int shard) {
-        return eventRepositories.get(shard).nextEvents(topic, null, Integer.MAX_VALUE);
+    private List<Event> publishedEvents(int shard) {
+        return eventRepositories.get(shard).nextEvents(PARTITIONED_TOPIC, null, Integer.MAX_VALUE);
     }
 }

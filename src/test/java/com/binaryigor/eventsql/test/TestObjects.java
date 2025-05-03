@@ -10,25 +10,17 @@ public class TestObjects {
 
     private static final Random RANDOM = new Random();
 
-    public static EventPublication randomEventPublication(String topic, int partition) {
-        return randomEventPublication(topic, RANDOM.nextBoolean() ? null : UUID.randomUUID().toString(), partition);
+    public static EventPublication randomEventPublication(String topic) {
+        return randomEventPublication(topic, RANDOM.nextBoolean() ? null : UUID.randomUUID().toString());
     }
 
-    public static EventPublication randomEventPublication(String topic, String key, int partition) {
+    public static EventPublication randomEventPublication(String topic, String key) {
         var value = new byte[8];
         RANDOM.nextBytes(value);
 
         Map<String, String> metadata = RANDOM.nextBoolean() ? Map.of() : Map.of("consumer", UUID.randomUUID().toString());
 
-        return new EventPublication(topic, partition, key, value, metadata);
-    }
-
-    public static EventPublication randomEventPublication(String topic, String key) {
-        return randomEventPublication(topic, key, -1);
-    }
-
-    public static EventPublication randomEventPublication(String topic) {
-        return randomEventPublication(topic, -1);
+        return new EventPublication(topic, key, value, metadata);
     }
 
     public static int randomInt(int min, int max) {

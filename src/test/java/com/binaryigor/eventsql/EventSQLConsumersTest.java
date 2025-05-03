@@ -4,12 +4,12 @@ import com.binaryigor.eventsql.test.IntegrationTest;
 import com.binaryigor.eventsql.test.TestObjects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -20,14 +20,16 @@ import static org.assertj.core.api.Assertions.*;
 public class EventSQLConsumersTest extends IntegrationTest {
 
     private static final String TOPIC = "topic";
+    private static final TopicDefinition TOPIC_DEFINITION = new TopicDefinition(TOPIC, -1);
     private static final String PARTITIONED_TOPIC = "partitioned_topic";
+    private static final TopicDefinition PARTITIONED_TOPIC_DEFINITION = new TopicDefinition(PARTITIONED_TOPIC, 3);
     private static final String WITH_DLT_TOPIC = "with_dlt_topic";
     private static final String WITH_DLT_DLT_TOPIC = WITH_DLT_TOPIC + "_dlt";
 
     @BeforeEach
     void setup() {
-        registry.registerTopic(new TopicDefinition(TOPIC, -1))
-                .registerTopic(new TopicDefinition(PARTITIONED_TOPIC, 3))
+        registry.registerTopic(TOPIC_DEFINITION)
+                .registerTopic(PARTITIONED_TOPIC_DEFINITION)
                 .registerTopic(new TopicDefinition(WITH_DLT_TOPIC, -1))
                 .registerTopic(new TopicDefinition(WITH_DLT_DLT_TOPIC, -1));
     }
@@ -52,39 +54,42 @@ public class EventSQLConsumersTest extends IntegrationTest {
         awaitAssertion(() -> assertExpectedEvents(capturedEvents, event1, event2, event3));
     }
 
-    @Test
-    void consumesEventsFromPartitionedTopic() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void consumesEventsFromPartitionedTopic(boolean nullKeys) {
         // given
         var consumer = new ConsumerDefinition(PARTITIONED_TOPIC, "test-consumer", true);
         registry.registerConsumer(consumer);
-        var event1P0 = TestObjects.randomEventPublication(PARTITIONED_TOPIC, 0);
-        var event2P0 = TestObjects.randomEventPublication(PARTITIONED_TOPIC, 0);
-        var event1P1 = TestObjects.randomEventPublication(PARTITIONED_TOPIC, 1);
-        var event1P2 = TestObjects.randomEventPublication(PARTITIONED_TOPIC, 2);
-        var p0CapturedEvents = new ArrayList<Event>();
-        var p1CapturedEvents = new ArrayList<Event>();
-        var p2CapturedEvents = new ArrayList<Event>();
+
+        var events = Stream.generate(() -> {
+                    var key = nullKeys ? null : UUID.randomUUID().toString();
+                    return TestObjects.randomEventPublication(PARTITIONED_TOPIC, key);
+                }).limit(25)
+                .toList();
+        var p0CapturedEventsTotal = new AtomicInteger();
+        var p1CapturedEventsTotal = new AtomicInteger();
+        var p2CapturedEventsTotal = new AtomicInteger();
+        var capturedEvents = new CopyOnWriteArrayList<Event>();
 
         // when
         consumers.startConsumer(consumer.topic(), consumer.name(), e -> {
+            capturedEvents.add(e);
             if (e.partition() == 0) {
-                p0CapturedEvents.add(e);
+                p0CapturedEventsTotal.incrementAndGet();
             } else if (e.partition() == 1) {
-                p1CapturedEvents.add(e);
+                p1CapturedEventsTotal.incrementAndGet();
             } else {
-                p2CapturedEvents.add(e);
+                p2CapturedEventsTotal.incrementAndGet();
             }
         });
-        publisher.publish(event1P0);
-        publisher.publish(event2P0);
-        publisher.publish(event1P1);
-        publisher.publish(event1P2);
+        events.forEach(publisher::publish);
 
         // then
         awaitAssertion(() -> {
-            assertExpectedEvents(p0CapturedEvents, event1P0, event2P0);
-            assertExpectedEvents(p1CapturedEvents, event1P1);
-            assertExpectedEvents(p2CapturedEvents, event1P2);
+            assertThat(p0CapturedEventsTotal).hasPositiveValue();
+            assertThat(p1CapturedEventsTotal).hasPositiveValue();
+            assertThat(p2CapturedEventsTotal).hasPositiveValue();
+            assertExpectedEventsListIgnoringOrder(capturedEvents, events);
         });
     }
 
@@ -297,8 +302,14 @@ public class EventSQLConsumersTest extends IntegrationTest {
 
     private void assertExpectedEventsList(Collection<Event> capturedEvents, List<EventPublication> expectations) {
         assertThat(capturedEvents)
-                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("id")
+                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("id", "partition")
                 .containsExactlyElementsOf(expectedEvents(expectations));
+    }
+
+    private void assertExpectedEventsListIgnoringOrder(Collection<Event> capturedEvents, List<EventPublication> expectations) {
+        assertThat(capturedEvents)
+                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("id", "partition")
+                .containsExactlyInAnyOrderElementsOf(expectedEvents(expectations));
     }
 
     private List<Event> expectedEvents(List<EventPublication> publications) {
@@ -308,7 +319,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
     }
 
     private Event toEvent(EventPublication publication) {
-        return new Event(publication.topic(), -1, publication.partition(), publication.key(), publication.value(),
+        return new Event(publication.topic(), -1, -1, publication.key(), publication.value(),
                 publication.metadata());
     }
 

@@ -1,9 +1,6 @@
 package com.binaryigor.eventsql.test;
 
-import com.binaryigor.eventsql.EventSQL;
-import com.binaryigor.eventsql.EventSQLConsumers;
-import com.binaryigor.eventsql.EventSQLPublisher;
-import com.binaryigor.eventsql.EventSQLRegistry;
+import com.binaryigor.eventsql.*;
 import com.binaryigor.eventsql.internal.ConsumerRepository;
 import com.binaryigor.eventsql.internal.EventRepository;
 import com.binaryigor.eventsql.internal.sql.SqlConsumerRepository;
@@ -85,7 +82,7 @@ public abstract class IntegrationTest {
                     key TEXT,
                     value BYTEA NOT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    metadata JSONB NOT NULL,
+                    metadata JSON NOT NULL,
                     PRIMARY KEY (topic, id)
                 ) PARTITION BY LIST(topic);
                 """);
@@ -111,7 +108,7 @@ public abstract class IntegrationTest {
         dltEventFactory = eventSQL.consumers().dltEventFactory();
 
         var transactions = new SqlTransactions(dslContext);
-        eventRepository = new SqlEventRepository(transactions);
+        eventRepository = new SqlEventRepository(transactions, SQLDialect.POSTGRES);
         consumerRepository = new SqlConsumerRepository(transactions);
 
         cleanDb(dslContext, registry);

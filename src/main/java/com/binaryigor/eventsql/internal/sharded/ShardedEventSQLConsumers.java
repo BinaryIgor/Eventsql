@@ -59,4 +59,8 @@ public class ShardedEventSQLConsumers implements EventSQLConsumers {
             }
         });
     }
+
+    public List<EventSQLConsumers> consumers() {
+        return consumers;
+    }
 }
