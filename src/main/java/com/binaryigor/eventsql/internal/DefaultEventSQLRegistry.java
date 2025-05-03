@@ -39,8 +39,8 @@ public class DefaultEventSQLRegistry implements EventSQLRegistry {
         var currentTopicDefinitionOpt = topicRepository.ofName(topic.name());
         if (currentTopicDefinitionOpt.isEmpty()) {
             transactions.execute(() -> {
-                eventRepository.createPartition(topic.name());
                 topicRepository.save(topic);
+                eventRepository.createPartition(topic.name());
             });
             return this;
         }

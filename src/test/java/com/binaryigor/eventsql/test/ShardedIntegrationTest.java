@@ -2,9 +2,10 @@ package com.binaryigor.eventsql.test;
 
 import com.binaryigor.eventsql.EventSQL;
 import com.binaryigor.eventsql.EventSQLConsumers;
-import com.binaryigor.eventsql.EventSQLPublisher;
-import com.binaryigor.eventsql.EventSQLRegistry;
 import com.binaryigor.eventsql.internal.EventRepository;
+import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLConsumers;
+import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLPublisher;
+import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLRegistry;
 import com.binaryigor.eventsql.internal.sql.SqlEventRepository;
 import com.binaryigor.eventsql.internal.sql.SqlTransactions;
 import org.jooq.DSLContext;
@@ -37,26 +38,25 @@ public abstract class ShardedIntegrationTest {
         dslContexts.forEach(IntegrationTest::initDbSchema);
     }
 
-    private TestClock testClock;
     protected EventSQL eventSQL;
-    protected EventSQLRegistry registry;
-    protected EventSQLPublisher publisher;
-    protected EventSQLConsumers consumers;
+    protected ShardedEventSQLRegistry registry;
+    protected ShardedEventSQLPublisher publisher;
+    protected ShardedEventSQLConsumers consumers;
     protected EventSQLConsumers.DLTEventFactory dltEventFactory;
     protected List<? extends EventRepository> eventRepositories;
 
     @BeforeEach
     protected void baseSetup() {
-        testClock = new TestClock();
+        var testClock = new TestClock();
         eventSQL = new EventSQL(dataSources, SQLDialect.POSTGRES, testClock);
-        registry = eventSQL.registry();
-        publisher = eventSQL.publisher();
-        consumers = eventSQL.consumers();
+        registry = (ShardedEventSQLRegistry) eventSQL.registry();
+        publisher = (ShardedEventSQLPublisher) eventSQL.publisher();
+        consumers = (ShardedEventSQLConsumers) eventSQL.consumers();
 
         dltEventFactory = eventSQL.consumers().dltEventFactory();
 
         var transactions = dslContexts.stream().map(SqlTransactions::new).toList();
-        eventRepositories = transactions.stream().map(SqlEventRepository::new).toList();
+        eventRepositories = transactions.stream().map(t -> new SqlEventRepository(t, SQLDialect.POSTGRES)).toList();
 
         dslContexts.forEach(ctx -> cleanDb(ctx, registry));
     }

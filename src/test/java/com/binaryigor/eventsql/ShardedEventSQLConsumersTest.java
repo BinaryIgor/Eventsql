@@ -1,14 +1,20 @@
 package com.binaryigor.eventsql;
 
 import com.binaryigor.eventsql.test.ShardedIntegrationTest;
+import com.binaryigor.eventsql.test.TestDLTEventFactory;
 import com.binaryigor.eventsql.test.TestObjects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static com.binaryigor.eventsql.test.Tests.awaitAssertion;
@@ -45,50 +51,63 @@ public class ShardedEventSQLConsumersTest extends ShardedIntegrationTest {
         awaitAssertion(() -> assertExpectedEvents(capturedEvents, events));
     }
 
-    @Test
-    void consumesEventsFromPartitionedTopicOnAllShards() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void consumesEventsFromPartitionedTopicOnAllShards(boolean nullKeys) {
         // given
         var consumer = new ConsumerDefinition(PARTITIONED_TOPIC, "test-consumer", true);
         registry.registerConsumer(consumer);
 
-        var p0Events = Stream.generate(() -> TestObjects.randomEventPublication(PARTITIONED_TOPIC, 0))
-                .limit(5)
+        var events = Stream.generate(() -> {
+                    var key = nullKeys ? null : UUID.randomUUID().toString();
+                    return TestObjects.randomEventPublication(PARTITIONED_TOPIC, key);
+                }).limit(50)
                 .toList();
-        var p1Events = Stream.generate(() -> TestObjects.randomEventPublication(PARTITIONED_TOPIC, 1))
-                .limit(10)
-                .toList();
-        var p2Events = Stream.generate(() -> TestObjects.randomEventPublication(PARTITIONED_TOPIC, 2))
-                .limit(15)
-                .toList();
-        var p0CapturedEvents = new ArrayList<Event>();
-        var p1CapturedEvents = new ArrayList<Event>();
-        var p2CapturedEvents = new ArrayList<Event>();
+        var p0CapturedEventsTotal = new AtomicInteger();
+        var p1CapturedEventsTotal = new AtomicInteger();
+        var p2CapturedEventsTotal = new AtomicInteger();
+        var capturedEvents = new CopyOnWriteArrayList<Event>();
 
         // when
         consumers.startConsumer(consumer.topic(), consumer.name(), e -> {
+            capturedEvents.add(e);
             if (e.partition() == 0) {
-                p0CapturedEvents.add(e);
+                p0CapturedEventsTotal.incrementAndGet();
             } else if (e.partition() == 1) {
-                p1CapturedEvents.add(e);
+                p1CapturedEventsTotal.incrementAndGet();
             } else {
-                p2CapturedEvents.add(e);
+                p2CapturedEventsTotal.incrementAndGet();
             }
         }, CONSUMER_POLLING_DELAY);
-        p0Events.forEach(publisher::publish);
-        p1Events.forEach(publisher::publish);
-        p2Events.forEach(publisher::publish);
+        events.forEach(publisher::publish);
 
         // then
         awaitAssertion(() -> {
-            assertExpectedEvents(p0CapturedEvents, p0Events);
-            assertExpectedEvents(p1CapturedEvents, p1Events);
-            assertExpectedEvents(p2CapturedEvents, p2Events);
+            assertThat(p0CapturedEventsTotal).hasPositiveValue();
+            assertThat(p1CapturedEventsTotal).hasPositiveValue();
+            assertThat(p2CapturedEventsTotal).hasPositiveValue();
+            assertExpectedEvents(capturedEvents, events);
         });
+    }
+
+    @Test
+    void configuresDltFactoryForAllShardConsumers() {
+        // given
+        var shardConsumers = consumers.consumers();
+
+        // when
+        var configuredDltFactory = new TestDLTEventFactory();
+        consumers.configureDLTEventFactory(configuredDltFactory);
+
+        // then
+        shardConsumers.forEach(c ->
+                assertThat(c.dltEventFactory())
+                        .isEqualTo(configuredDltFactory));
     }
 
     private void assertExpectedEvents(Collection<Event> capturedEvents, List<EventPublication> expectations) {
         assertThat(capturedEvents)
-                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("id")
+                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("id", "partition")
                 .containsExactlyInAnyOrderElementsOf(expectedEvents(expectations));
     }
 
@@ -99,7 +118,7 @@ public class ShardedEventSQLConsumersTest extends ShardedIntegrationTest {
     }
 
     private Event toEvent(EventPublication publication) {
-        return new Event(publication.topic(), -1, publication.partition(), publication.key(), publication.value(),
+        return new Event(publication.topic(), -1, -1, publication.key(), publication.value(),
                 publication.metadata());
     }
 }

@@ -33,8 +33,6 @@ public class DefaultDLTEventFactory implements EventSQLConsumers.DLTEventFactory
         metadata.put("exceptionType", cause.getClass().getName());
         metadata.put("exceptionMessage", Optional.ofNullable(cause.getMessage()).orElse(exception.getMessage()));
 
-        // TODO: maybe warning, strange situation
-        var partition = dltTopicDefinitionOpt.get().partitions() < event.partition() ? -1 : dltTopicDefinitionOpt.get().partitions();
-        return Optional.of(new EventPublication(dltTopic, partition, event.key(), event.value(), metadata));
+        return Optional.of(new EventPublication(dltTopic, event.key(), event.value(), metadata));
     }
 }

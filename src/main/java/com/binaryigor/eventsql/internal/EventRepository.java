@@ -1,7 +1,6 @@
 package com.binaryigor.eventsql.internal;
 
 import com.binaryigor.eventsql.Event;
-import com.binaryigor.eventsql.EventPublication;
 
 import java.util.Collection;
 import java.util.List;
@@ -12,9 +11,9 @@ public interface EventRepository {
 
     void deletePartition(String topic);
 
-    void create(EventPublication event);
+    void create(EventInput event);
 
-    void createAll(Collection<EventPublication> events);
+    void createAll(Collection<EventInput> events);
 
     List<Event> nextEvents(String topic, Long lastId, int limit);
 

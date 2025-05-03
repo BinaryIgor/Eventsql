@@ -51,7 +51,7 @@
                             <goal>single</goal>
                         </goals>
                         <configuration>
-                            <finalName>eventsql-benchmarks-runer</finalName>
+                            <finalName>eventsql-benchmarks-runner</finalName>
                             <archive>
                                 <manifest>
                                     <mainClass>com.binaryigor.eventsql.benchmarks.EventSQLBenchmarksRunner</mainClass>

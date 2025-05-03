@@ -19,7 +19,7 @@ CREATE TABLE event (
   key TEXT,
   value BYTEA NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  metadata JSONB NOT NULL,
+  metadata JSON NOT NULL,
   PRIMARY KEY (topic, id)
 ) PARTITION BY LIST (topic);
 
