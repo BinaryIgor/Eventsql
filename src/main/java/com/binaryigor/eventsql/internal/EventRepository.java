@@ -15,7 +15,7 @@ public interface EventRepository {
 
     void createAll(Collection<EventInput> events);
 
-    List<Event> nextEvents(String topic, Long lastId, int limit);
+    List<Event> nextEvents(String topic, Long lastSeq, int limit);
 
-    List<Event> nextEvents(String topic, int partition, Long lastId, int limit);
+    List<Event> nextEvents(String topic, int partition, Long lastSeq, int limit);
 }

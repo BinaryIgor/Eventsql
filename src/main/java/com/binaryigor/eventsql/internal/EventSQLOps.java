@@ -7,9 +7,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -27,6 +25,7 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
     private final Transactions transactions;
     private final ConsumerRepository consumerRepository;
     private final EventRepository eventRepository;
+    private final EventSequenceRepository eventSequenceRepository;
     private final Clock clock;
     private final Map<ConsumerId, Thread> consumerThreads = new ConcurrentHashMap<>();
     private Partitioner partitioner;
@@ -36,11 +35,13 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
                        Transactions transactions,
                        ConsumerRepository consumerRepository,
                        EventRepository eventRepository,
+                       EventSequenceRepository eventSequenceRepository,
                        Clock clock) {
         this.topicDefinitionsCache = topicDefinitionsCache;
         this.transactions = transactions;
         this.consumerRepository = consumerRepository;
         this.eventRepository = eventRepository;
+        this.eventSequenceRepository = eventSequenceRepository;
         this.clock = clock;
         this.partitioner = new DefaultPartitioner();
         this.dltEventFactory = new DefaultDLTEventFactory(topicDefinitionsCache);
@@ -58,17 +59,38 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
         transactions.execute(() -> publicationsByTopic.forEach(this::publish));
     }
 
+    // TODO: refactor, test
     private void publish(String topicName, Collection<EventPublication> publications) {
+        var eventSequences = new HashMap<EventSequenceKey, EventSequence>();
+
         var topic = findTopicDefinition(topicName);
         var toCreateEvents = publications.stream()
                 .map(publication -> {
                     var partition = (short) partitioner.partition(publication, topic.partitions());
-                    var eventInput = new EventInput(publication, partition);
+
+                    var eventSequenceKey = new EventSequenceKey(topicName, partition);
+                    var eventSequence = Optional.ofNullable(eventSequences.get(eventSequenceKey))
+                            .orElseGet(() -> {
+                                var es = eventSequenceRepository.ofKeyForUpdate(eventSequenceKey)
+                                        .orElseThrow(() -> new IllegalArgumentException("Required event sequence for %s topic and %d partition doesn't exist"
+                                                .formatted(topicName, partition)));
+
+                                eventSequences.put(eventSequenceKey, es);
+
+                                return es;
+                            });
+
+                    var eventInput = new EventInput(publication, eventSequence.nextSeq(), partition);
                     validateNewEvent(eventInput, topic);
+
+                    eventSequences.put(eventSequenceKey, eventSequence.incremented());
+
                     return eventInput;
                 })
                 .toList();
+
         eventRepository.createAll(toCreateEvents);
+        eventSequenceRepository.saveAll(eventSequences.values());
     }
 
     private void validateNewEvent(EventInput publication, TopicDefinition topic) {
@@ -174,18 +196,18 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
         boolean delayNextPolling;
         try {
             consumer.accept(events);
-            lastEventId = events.getLast().id();
+            lastEventId = events.getLast().seq();
             delayNextPolling = events.size() < consumptionConfig.maxEvents();
         } catch (EventSQLConsumptionException e) {
             var dltEvent = dltEventFactory.create(e, consumerId.name());
             if (dltEvent.isPresent()) {
                 logger.error("Problem while consuming event for {} consumer, publishing it to dlt: ", consumerId, e);
-                lastEventId = e.event().id();
+                lastEventId = e.event().seq();
                 publish(dltEvent.get());
                 delayNextPolling = false;
             } else {
                 logger.error("Problem while consuming event for {} consumer: ", consumerId, e);
-                lastEventId = e.event().id() - 1;
+                lastEventId = e.event().seq() - 1;
                 delayNextPolling = true;
             }
         }
@@ -199,9 +221,9 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
 
     private List<Event> nextEvents(com.binaryigor.eventsql.internal.Consumer consumer, int limit) {
         if (consumer.partition() == -1) {
-            return eventRepository.nextEvents(consumer.topic(), consumer.lastEventId(), limit);
+            return eventRepository.nextEvents(consumer.topic(), -1, consumer.lastEventSeq(), limit);
         }
-        return eventRepository.nextEvents(consumer.topic(), consumer.partition(), consumer.lastEventId(), limit);
+        return eventRepository.nextEvents(consumer.topic(), consumer.partition(), consumer.lastEventSeq(), limit);
     }
 
     private boolean shouldWaitForMinEvents(Instant lastConsumptionAt, Duration maxPoolingDelay) {

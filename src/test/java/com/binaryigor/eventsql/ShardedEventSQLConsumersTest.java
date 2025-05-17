@@ -35,7 +35,7 @@ public class ShardedEventSQLConsumersTest extends ShardedIntegrationTest {
     @Test
     void consumesEventsFromTopicOnAllShards() {
         // given
-        var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
+        var consumer = new ConsumerDefinition(TOPIC, "test-consumer");
         registry.registerConsumer(consumer);
 
         var events = Stream.generate(() -> TestObjects.randomEventPublication(TOPIC))
@@ -55,7 +55,7 @@ public class ShardedEventSQLConsumersTest extends ShardedIntegrationTest {
     @ValueSource(booleans = {true, false})
     void consumesEventsFromPartitionedTopicOnAllShards(boolean nullKeys) {
         // given
-        var consumer = new ConsumerDefinition(PARTITIONED_TOPIC, "test-consumer", true);
+        var consumer = new ConsumerDefinition(PARTITIONED_TOPIC, "test-consumer");
         registry.registerConsumer(consumer);
 
         var events = Stream.generate(() -> {

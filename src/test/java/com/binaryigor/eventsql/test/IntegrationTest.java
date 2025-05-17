@@ -60,10 +60,17 @@ public abstract class IntegrationTest {
                     topic TEXT NOT NULL,
                     name TEXT NOT NULL,
                     partition SMALLINT NOT NULL,
-                    last_event_id BIGINT,
+                    last_event_seq BIGINT,
                     last_consumption_at TIMESTAMP,
                     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
                     PRIMARY KEY (topic, name, partition)
+                );
+                
+                CREATE TABLE event_sequence (
+                    topic TEXT NOT NULL,
+                    partition SMALLINT NOT NULL,
+                    next_seq BIGINT NOT NULL,
+                    PRIMARY KEY (topic, partition)
                 );
                 """);
     }
@@ -77,13 +84,13 @@ public abstract class IntegrationTest {
                  DROP TABLE IF EXISTS event;
                  CREATE TABLE event (
                     topic TEXT NOT NULL,
-                    id BIGSERIAL NOT NULL,
                     partition SMALLINT NOT NULL,
+                    seq BIGINT NOT NULL,
                     key TEXT,
                     value BYTEA NOT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
                     metadata JSON NOT NULL,
-                    PRIMARY KEY (topic, id)
+                    PRIMARY KEY (topic, partition, seq)
                 ) PARTITION BY LIST(topic);
                 """);
     }

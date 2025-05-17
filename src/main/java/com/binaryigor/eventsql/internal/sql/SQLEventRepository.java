@@ -19,7 +19,7 @@ public class SQLEventRepository implements EventRepository {
     private static final Logger logger = LoggerFactory.getLogger(SQLEventRepository.class);
     private static final Table<?> EVENT = DSL.table("event");
     private static final Field<String> TOPIC = DSL.field("topic", String.class);
-    private static final Field<Long> ID = DSL.field("id", Long.class);
+    private static final Field<Long> SEQ = DSL.field("seq", Long.class);
     private static final Field<Short> PARTITION = DSL.field("partition", Short.class);
     private static final Field<String> KEY = DSL.field("key", String.class);
     private static final Field<byte[]> VALUE = DSL.field("value", byte[].class);
@@ -76,41 +76,41 @@ public class SQLEventRepository implements EventRepository {
 
         var insert = contextProvider.get()
                 .insertInto(EVENT)
-                .columns(TOPIC, PARTITION, KEY, VALUE, METADATA);
+                .columns(TOPIC, PARTITION, SEQ, KEY, VALUE, METADATA);
 
         events.forEach(ei -> {
             var e = ei.publication();
             var metadataJSON = SimpleJSONMapper.toJSON(e.metadata());
-            insert.values(e.topic(), ei.partition(), e.key(), e.value(), JSON.valueOf(metadataJSON));
+            insert.values(e.topic(), ei.partition(), ei.seq(), e.key(), e.value(), JSON.valueOf(metadataJSON));
         });
 
         insert.execute();
     }
 
     @Override
-    public List<Event> nextEvents(String topic, Long lastId, int limit) {
-        return nextEvents(topic, null, lastId, limit);
+    public List<Event> nextEvents(String topic, Long lastSeq, int limit) {
+        return nextEvents(topic, null, lastSeq, limit);
     }
 
     private List<Event> nextEvents(String topic, Short partition, Long lastId, int limit) {
         var condition = TOPIC.eq(topic);
         if (lastId != null) {
-            condition = condition.and(ID.greaterThan(lastId));
+            condition = condition.and(SEQ.greaterThan(lastId));
         }
         if (partition != null) {
             condition = condition.and(PARTITION.eq(partition));
         }
         return contextProvider.get()
-                .select(TOPIC, ID, PARTITION, KEY, VALUE, METADATA)
+                .select(TOPIC, PARTITION, SEQ, KEY, VALUE, METADATA)
                 .from(EVENT)
                 .where(condition)
-                .orderBy(ID)
+                .orderBy(PARTITION, SEQ)
                 .limit(limit)
                 .fetchInto(Event.class);
     }
 
     @Override
-    public List<Event> nextEvents(String topic, int partition, Long lastId, int limit) {
-        return nextEvents(topic, Short.valueOf((short) partition), lastId, limit);
+    public List<Event> nextEvents(String topic, int partition, Long lastSeq, int limit) {
+        return nextEvents(topic, Short.valueOf((short) partition), lastSeq, limit);
     }
 }

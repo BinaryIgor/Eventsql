@@ -80,7 +80,7 @@ public class EventSQLRegistryTest extends IntegrationTest {
         // given
         var topic = new TopicDefinition(TOPIC, -1);
         registry.registerTopic(topic);
-        registry.registerConsumer(new ConsumerDefinition(topic.name(), CONSUMER, false));
+        registry.registerConsumer(new ConsumerDefinition(topic.name(), CONSUMER));
 
         // expect
         assertRegisterThrowsHasEventsOrConsumersException(new TopicDefinition(topic.name(), 2));
@@ -116,8 +116,8 @@ public class EventSQLRegistryTest extends IntegrationTest {
         var topic = new TopicDefinition(TOPIC, -1);
         registry.registerTopic(topic);
         // and consumers
-        registry.registerConsumer(new ConsumerDefinition(topic.name(), "consumer-1", false));
-        registry.registerConsumer(new ConsumerDefinition(topic.name(), "consumer-2", false));
+        registry.registerConsumer(new ConsumerDefinition(topic.name(), "consumer-1"));
+        registry.registerConsumer(new ConsumerDefinition(topic.name(), "consumer-2"));
 
         // expect
         assertThatThrownBy(() -> registry.unregisterTopic(topic.name()))
@@ -137,7 +137,7 @@ public class EventSQLRegistryTest extends IntegrationTest {
                 .isEmpty();
 
         // when
-        var consumer = new ConsumerDefinition(topic.name(), "consumer", false);
+        var consumer = new ConsumerDefinition(topic.name(), "consumer");
         registry.registerConsumer(consumer);
         registry.registerConsumer(consumer);
 
@@ -151,11 +151,11 @@ public class EventSQLRegistryTest extends IntegrationTest {
         // given
         var topic = new TopicDefinition(TOPIC, 2);
         registry.registerTopic(topic);
-        var consumer = new ConsumerDefinition(topic.name(), "consumer", false);
+        var consumer = new ConsumerDefinition(topic.name(), "consumer");
         registry.registerConsumer(consumer);
 
         // when
-        var changedConsumer = new ConsumerDefinition(consumer.topic(), consumer.name(), true);
+        var changedConsumer = new ConsumerDefinition(consumer.topic(), consumer.name());
         registry.registerConsumer(changedConsumer);
 
         // then
@@ -171,7 +171,7 @@ public class EventSQLRegistryTest extends IntegrationTest {
     @Test
     void doesNotAllowToRegisterConsumerOfNonExistingTopic() {
         // expect
-        assertThatThrownBy(() -> registry.registerConsumer(new ConsumerDefinition("non-existing-topic", "customer", false)))
+        assertThatThrownBy(() -> registry.registerConsumer(new ConsumerDefinition("non-existing-topic", "customer")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("topic doesn't exist");
     }
@@ -181,7 +181,7 @@ public class EventSQLRegistryTest extends IntegrationTest {
         // given
         var topic = new TopicDefinition(TOPIC, 2);
         registry.registerTopic(topic);
-        var consumer = new ConsumerDefinition(topic.name(), "consumer", true);
+        var consumer = new ConsumerDefinition(topic.name(), "consumer");
         registry.registerConsumer(consumer);
 
         // and state, because some events were consumer
@@ -193,7 +193,7 @@ public class EventSQLRegistryTest extends IntegrationTest {
 
         // expect
         assertThatThrownBy(() ->
-                registry.registerConsumer(new ConsumerDefinition(consumer.topic(), consumer.name(), false))
+                registry.registerConsumer(new ConsumerDefinition(consumer.topic(), consumer.name()))
         ).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Cannot modify consumers with state");
         // and consumer definition has not changed
@@ -206,7 +206,7 @@ public class EventSQLRegistryTest extends IntegrationTest {
         // given
         var topic = new TopicDefinition(TOPIC, 2);
         registry.registerTopic(topic);
-        var consumer = new ConsumerDefinition(topic.name(), "consumer", true);
+        var consumer = new ConsumerDefinition(topic.name(), "consumer");
         registry.registerConsumer(consumer);
         assertThat(registry.listConsumers())
                 .containsExactly(consumer);

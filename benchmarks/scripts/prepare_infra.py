@@ -10,7 +10,7 @@ VPC_RESOURCE = "vpcs"
 DROPLETS_RESOURCE = "droplets"
 FIREWALLS_RESOURCE = "firewalls"
 
-ID = "id"
+ID = "seq"
 NAME = "name"
 
 # full machine slugs reference: https://slugs.do-api.dev/

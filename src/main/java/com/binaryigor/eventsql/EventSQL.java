@@ -6,10 +6,7 @@ import com.binaryigor.eventsql.internal.TopicDefinitionsCache;
 import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLConsumers;
 import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLPublisher;
 import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLRegistry;
-import com.binaryigor.eventsql.internal.sql.SQLConsumerRepository;
-import com.binaryigor.eventsql.internal.sql.SQLEventRepository;
-import com.binaryigor.eventsql.internal.sql.SQLTopicRepository;
-import com.binaryigor.eventsql.internal.sql.SQLTransactions;
+import com.binaryigor.eventsql.internal.sql.*;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 
@@ -61,12 +58,15 @@ public class EventSQL {
 
             var topicRepository = new SQLTopicRepository(transactions);
             var consumerRepository = new SQLConsumerRepository(transactions);
+            var eventSequenceRepository = new SQLEventSequenceRepository(transactions);
             var eventRepository = new SQLEventRepository(transactions, jooqDialect);
 
-            var registry = new DefaultEventSQLRegistry(topicRepository, eventRepository, consumerRepository, transactions);
+            var registry = new DefaultEventSQLRegistry(topicRepository, eventRepository, eventSequenceRepository,
+                    consumerRepository, transactions);
 
             var topicDefinitionsCache = new TopicDefinitionsCache(topicRepository);
-            var ops = new EventSQLOps(topicDefinitionsCache, transactions, consumerRepository, eventRepository, clock);
+            var ops = new EventSQLOps(topicDefinitionsCache, transactions, consumerRepository, eventRepository,
+                    eventSequenceRepository, clock);
 
             registryList.add(registry);
             publisherList.add(ops);

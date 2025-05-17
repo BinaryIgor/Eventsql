@@ -12,7 +12,7 @@ public class SimpleJSONMapperTest {
     @Test
     void mapsToJSON() {
         var input = new LinkedHashMap<String, String>();
-        input.put("id", "1");
+        input.put("seq", "1");
         input.put("name", "some-name");
         input.put("description", """
                 line 1
@@ -20,7 +20,7 @@ public class SimpleJSONMapperTest {
 
         var expectedJson = """
                 {
-                  "id": "1",
+                  "seq": "1",
                   "name": "some-name",
                   "description": "line 1\\nline 2"
                 }

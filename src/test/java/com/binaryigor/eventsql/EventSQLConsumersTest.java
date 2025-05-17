@@ -37,7 +37,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
     @Test
     void consumesEventsFromTopic() {
         // given
-        var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
+        var consumer = new ConsumerDefinition(TOPIC, "test-consumer");
         registry.registerConsumer(consumer);
         var event1 = TestObjects.randomEventPublication(TOPIC);
         var event2 = TestObjects.randomEventPublication(TOPIC);
@@ -58,7 +58,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
     @ValueSource(booleans = {true, false})
     void consumesEventsFromPartitionedTopic(boolean nullKeys) {
         // given
-        var consumer = new ConsumerDefinition(PARTITIONED_TOPIC, "test-consumer", true);
+        var consumer = new ConsumerDefinition(PARTITIONED_TOPIC, "test-consumer");
         registry.registerConsumer(consumer);
 
         var events = Stream.generate(() -> {
@@ -96,7 +96,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
     @Test
     void consumesEventsInBatches() {
         // given
-        var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
+        var consumer = new ConsumerDefinition(TOPIC, "test-consumer");
         registry.registerConsumer(consumer);
         var toPublishBatch1 = Stream.generate(() -> TestObjects.randomEventPublication(TOPIC)).limit(5).toList();
         var toPublishBatch2 = Stream.generate(() -> TestObjects.randomEventPublication(TOPIC)).limit(10).toList();
@@ -125,7 +125,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
     @Test
     void eventuallyConsumesEventsInBatchesWhenThereIsLessThanMinEvents() {
         // given
-        var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
+        var consumer = new ConsumerDefinition(TOPIC, "test-consumer");
         registry.registerConsumer(consumer);
         var capturedBatches = new ArrayList<Collection<Event>>();
         var event = TestObjects.randomEventPublication(TOPIC);
@@ -151,7 +151,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
     void safelyConsumesByLockingMultipleConsumerInstancesOnDbLevel() {
         // given
         var topic = new TopicDefinition(TOPIC, -1);
-        var consumer = new ConsumerDefinition(topic.name(), "multiplied-consumer", false);
+        var consumer = new ConsumerDefinition(topic.name(), "multiplied-consumer");
         // lots of concurrency
         var eventSQLInstances = Stream.generate(this::newEventSQLInstance).limit(50).toList();
 
@@ -180,7 +180,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
     @Test
     void onFailureForTopicWithoutDltConsumptionIsStuckOnFailedEvent() {
         // given
-        var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
+        var consumer = new ConsumerDefinition(TOPIC, "test-consumer");
         registry.registerConsumer(consumer);
         var event1 = TestObjects.randomEventPublication(TOPIC, "event1");
         var event2 = TestObjects.randomEventPublication(TOPIC, "event2Failure");
@@ -207,8 +207,8 @@ public class EventSQLConsumersTest extends IntegrationTest {
     @Test
     void onFailureForTopicWithDltEventIsPublishedToDlt() {
         // given
-        var consumer = new ConsumerDefinition(WITH_DLT_TOPIC, "test-consumer", false);
-        var dltConsumer = new ConsumerDefinition(WITH_DLT_DLT_TOPIC, "dlt-" + consumer.name(), false);
+        var consumer = new ConsumerDefinition(WITH_DLT_TOPIC, "test-consumer");
+        var dltConsumer = new ConsumerDefinition(WITH_DLT_DLT_TOPIC, "dlt-" + consumer.name());
         registry.registerConsumer(consumer);
         registry.registerConsumer(dltConsumer);
 
@@ -247,7 +247,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
     @Test
     void consumesEventsInLoopContinuingOnFailures() {
         // given
-        var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
+        var consumer = new ConsumerDefinition(TOPIC, "test-consumer");
         registry.registerConsumer(consumer);
         var capturedEvents = new ArrayList<Event>();
         var eventsToPublish = 50;
@@ -275,7 +275,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
     @Test
     void startsConsumersIdempotently() {
         // given
-        var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
+        var consumer = new ConsumerDefinition(TOPIC, "test-consumer");
         registry.registerConsumer(consumer);
 
         // expect
@@ -302,13 +302,13 @@ public class EventSQLConsumersTest extends IntegrationTest {
 
     private void assertExpectedEventsList(Collection<Event> capturedEvents, List<EventPublication> expectations) {
         assertThat(capturedEvents)
-                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("id", "partition")
+                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("seq", "partition")
                 .containsExactlyElementsOf(expectedEvents(expectations));
     }
 
     private void assertExpectedEventsListIgnoringOrder(Collection<Event> capturedEvents, List<EventPublication> expectations) {
         assertThat(capturedEvents)
-                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("id", "partition")
+                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("seq", "partition")
                 .containsExactlyInAnyOrderElementsOf(expectedEvents(expectations));
     }
 

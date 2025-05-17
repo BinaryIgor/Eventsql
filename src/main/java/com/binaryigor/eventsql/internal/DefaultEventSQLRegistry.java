@@ -4,6 +4,7 @@ import com.binaryigor.eventsql.ConsumerDefinition;
 import com.binaryigor.eventsql.EventSQLRegistry;
 import com.binaryigor.eventsql.TopicDefinition;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -11,18 +12,22 @@ import java.util.stream.IntStream;
 
 import static java.util.stream.Collectors.toList;
 
+// TODO: remove partitioned consumer options - it should be derived from a topic
 public class DefaultEventSQLRegistry implements EventSQLRegistry {
 
     private final TopicRepository topicRepository;
+    private final EventSequenceRepository eventSequenceRepository;
     private final EventRepository eventRepository;
     private final ConsumerRepository consumerRepository;
     private final Transactions transactions;
 
     public DefaultEventSQLRegistry(TopicRepository topicRepository,
                                    EventRepository eventRepository,
+                                   EventSequenceRepository eventSequenceRepository,
                                    ConsumerRepository consumerRepository,
                                    Transactions transactions) {
         this.topicRepository = topicRepository;
+        this.eventSequenceRepository = eventSequenceRepository;
         this.eventRepository = eventRepository;
         this.consumerRepository = consumerRepository;
         this.transactions = transactions;
@@ -40,6 +45,7 @@ public class DefaultEventSQLRegistry implements EventSQLRegistry {
         if (currentTopicDefinitionOpt.isEmpty()) {
             transactions.execute(() -> {
                 topicRepository.save(topic);
+                eventSequenceRepository.saveAll(initialEventSequences(topic));
                 eventRepository.createPartition(topic.name());
             });
             return this;
@@ -55,8 +61,18 @@ public class DefaultEventSQLRegistry implements EventSQLRegistry {
         }
 
         topicRepository.save(topic);
+        eventSequenceRepository.saveAll(initialEventSequences(topic));
 
         return this;
+    }
+
+    private Collection<EventSequence> initialEventSequences(TopicDefinition topic) {
+        if (topic.partitions() == -1) {
+            return List.of(new EventSequence(topic.name(), -1, 1));
+        }
+        return IntStream.range(0, topic.partitions())
+                .mapToObj(p -> new EventSequence(topic.name(), p, 1))
+                .toList();
     }
 
     private boolean topicHasEventsOrConsumers(String topic) {
@@ -73,6 +89,7 @@ public class DefaultEventSQLRegistry implements EventSQLRegistry {
 
             topicRepository.delete(topic);
             eventRepository.deletePartition(topic);
+            eventSequenceRepository.deleteAllOfTopic(topic);
         });
 
         return this;
@@ -87,18 +104,14 @@ public class DefaultEventSQLRegistry implements EventSQLRegistry {
     public EventSQLRegistry registerConsumer(ConsumerDefinition consumer) {
         var topic = findTopicDefinition(consumer.topic());
 
-        if (topic.partitions() < 0 && consumer.partitioned()) {
-            throw new IllegalArgumentException("%s topic is not partitioned, but %s consumer is!"
-                    .formatted(topic.name(), consumer.name()));
-        }
-
         var currentConsumers = consumerRepository.allOf(consumer.topic(), consumer.name());
-        if (consumerDefinitionHaveNotChanged(currentConsumers, topic, consumer)) {
+        if (currentConsumers.size() == topic.partitions() ||
+                (topic.partitions() == -1 && currentConsumers.size() == 1)) {
             return this;
         }
 
         currentConsumers.forEach(c -> {
-            if (c.lastEventId() != null) {
+            if (c.lastEventSeq() != null) {
                 throw new IllegalArgumentException("Cannot modify consumers with state; you must unregister them first");
             }
         });
@@ -109,16 +122,6 @@ public class DefaultEventSQLRegistry implements EventSQLRegistry {
             consumerRepository.saveAll(consumersToSave);
         });
         return this;
-    }
-
-    private boolean consumerDefinitionHaveNotChanged(List<Consumer> currentConsumers,
-                                                     TopicDefinition topicDefinition,
-                                                     ConsumerDefinition consumerDefinition) {
-        if ((currentConsumers.size() == 1 && consumerDefinition.partitioned()) ||
-                (currentConsumers.size() > 1 && !consumerDefinition.partitioned())) {
-            return false;
-        }
-        return currentConsumers.size() == topicDefinition.partitions() || currentConsumers.size() == 1;
     }
 
     @Override
@@ -135,7 +138,7 @@ public class DefaultEventSQLRegistry implements EventSQLRegistry {
         return groupedConsumers.values().stream()
                 .map(consumers -> {
                     var first = consumers.getFirst();
-                    return new ConsumerDefinition(first.topic(), first.name(), consumers.size() > 1);
+                    return new ConsumerDefinition(first.topic(), first.name());
                 })
                 .toList();
     }
@@ -147,7 +150,7 @@ public class DefaultEventSQLRegistry implements EventSQLRegistry {
 
     private List<Consumer> toConsumers(ConsumerDefinition registration,
                                        TopicDefinition topic) {
-        if (!registration.partitioned()) {
+        if (topic.partitions() == -1) {
             return List.of(toConsumer(registration, -1));
         }
         return IntStream.range(0, topic.partitions())

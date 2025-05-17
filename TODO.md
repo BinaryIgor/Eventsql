@@ -10,3 +10,4 @@
   * custom enums for db dialect - hide JOOQ usage!
 * full MySQL/MariaDB support
 * randomize delay option to increase parallelism
+* bug! https://www.postgresql.org/docs/current/sql-createsequence.html

@@ -19,7 +19,7 @@ public class SQLConsumerRepository implements ConsumerRepository {
     private static final Field<String> TOPIC = DSL.field("topic", String.class);
     private static final Field<String> NAME = DSL.field("name", String.class);
     private static final Field<Short> PARTITION = DSL.field("partition", Short.class);
-    private static final Field<Long> LAST_EVENT_ID = DSL.field("last_event_id", Long.class);
+    private static final Field<Long> LAST_EVENT_SEQ = DSL.field("last_event_seq", Long.class);
     private static final Field<Instant> LAST_CONSUMPTION_AT = DSL.field("last_consumption_at", Instant.class);
     private final DSLContextProvider contextProvider;
 
@@ -39,13 +39,13 @@ public class SQLConsumerRepository implements ConsumerRepository {
         }
         var insert = contextProvider.get()
                 .insertInto(CONSUMER)
-                .columns(TOPIC, NAME, PARTITION, LAST_EVENT_ID, LAST_CONSUMPTION_AT);
+                .columns(TOPIC, NAME, PARTITION, LAST_EVENT_SEQ, LAST_CONSUMPTION_AT);
 
-        consumers.forEach(c -> insert.values(c.topic(), c.name(), (short) c.partition(), c.lastEventId(), c.lastConsumptionAt()));
+        consumers.forEach(c -> insert.values(c.topic(), c.name(), (short) c.partition(), c.lastEventSeq(), c.lastConsumptionAt()));
 
         insert.onConflict(TOPIC, NAME, PARTITION)
                 .doUpdate()
-                .set(LAST_EVENT_ID, DSL.excluded(LAST_EVENT_ID))
+                .set(LAST_EVENT_SEQ, DSL.excluded(LAST_EVENT_SEQ))
                 .set(LAST_CONSUMPTION_AT, DSL.excluded(LAST_CONSUMPTION_AT))
                 .execute();
     }
@@ -57,7 +57,7 @@ public class SQLConsumerRepository implements ConsumerRepository {
 
     private List<Consumer> allOf(Condition condition) {
         return contextProvider.get()
-                .select(TOPIC, NAME, PARTITION, LAST_EVENT_ID, LAST_CONSUMPTION_AT)
+                .select(TOPIC, NAME, PARTITION, LAST_EVENT_SEQ, LAST_CONSUMPTION_AT)
                 .from(CONSUMER)
                 .where(condition)
                 .fetchInto(Consumer.class);
@@ -76,7 +76,7 @@ public class SQLConsumerRepository implements ConsumerRepository {
     @Override
     public Optional<Consumer> ofIdForUpdateSkippingLocked(ConsumerId id) {
         return contextProvider.get()
-                .select(TOPIC, NAME, PARTITION, LAST_EVENT_ID, LAST_CONSUMPTION_AT)
+                .select(TOPIC, NAME, PARTITION, LAST_EVENT_SEQ, LAST_CONSUMPTION_AT)
                 .from(CONSUMER)
                 .where(TOPIC.eq(id.topic())
                         .and(NAME.eq(id.name()))
@@ -90,7 +90,7 @@ public class SQLConsumerRepository implements ConsumerRepository {
     public void update(ConsumerId id, long lastEventId, Instant lastConsumptionAt) {
         contextProvider.get()
                 .update(CONSUMER)
-                .set(LAST_EVENT_ID, lastEventId)
+                .set(LAST_EVENT_SEQ, lastEventId)
                 .set(LAST_CONSUMPTION_AT, lastConsumptionAt)
                 .where(TOPIC.eq(id.topic())
                         .and(NAME.eq(id.name()))
