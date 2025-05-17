@@ -109,10 +109,8 @@ import javax.sql.DataSource;
 // dialect of your events backend - POSTGRES, MYSQL, MARIADB and so on;
 // as of now, only POSTGRES has fully tested support;
 // should also work with others but some things - event table partition management for example - works only with Postgres, for others it must be managed manually
-import org.jooq.SQLDialect;
-
-var eventSQL = new EventSQL(dataSource, SQLDialect.POSTGRES);
-ver shardedEventSQL = new EventSQL(dataSources, SQLDialect.POSTGRES);
+var eventSQL = new EventSQL(dataSource, EventSQLDialect.POSTGRES);
+ver shardedEventSQL = new EventSQL(dataSources, EventSQLDialect.POSTGRES);
 ```
 
 Sharded version works in the same vain - it just assumes that topics and consumers are hosted on multiple dbs.

@@ -13,7 +13,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-public class SqlConsumerRepository implements ConsumerRepository {
+public class SQLConsumerRepository implements ConsumerRepository {
 
     private static final Table<?> CONSUMER = DSL.table("consumer");
     private static final Field<String> TOPIC = DSL.field("topic", String.class);
@@ -21,9 +21,9 @@ public class SqlConsumerRepository implements ConsumerRepository {
     private static final Field<Short> PARTITION = DSL.field("partition", Short.class);
     private static final Field<Long> LAST_EVENT_ID = DSL.field("last_event_id", Long.class);
     private static final Field<Instant> LAST_CONSUMPTION_AT = DSL.field("last_consumption_at", Instant.class);
-    private final DslContextProvider contextProvider;
+    private final DSLContextProvider contextProvider;
 
-    public SqlConsumerRepository(DslContextProvider contextProvider) {
+    public SQLConsumerRepository(DSLContextProvider contextProvider) {
         this.contextProvider = contextProvider;
     }
 

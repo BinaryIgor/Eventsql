@@ -6,10 +6,10 @@ import com.binaryigor.eventsql.internal.TopicDefinitionsCache;
 import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLConsumers;
 import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLPublisher;
 import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLRegistry;
-import com.binaryigor.eventsql.internal.sql.SqlConsumerRepository;
-import com.binaryigor.eventsql.internal.sql.SqlEventRepository;
-import com.binaryigor.eventsql.internal.sql.SqlTopicRepository;
-import com.binaryigor.eventsql.internal.sql.SqlTransactions;
+import com.binaryigor.eventsql.internal.sql.SQLConsumerRepository;
+import com.binaryigor.eventsql.internal.sql.SQLEventRepository;
+import com.binaryigor.eventsql.internal.sql.SQLTopicRepository;
+import com.binaryigor.eventsql.internal.sql.SQLTransactions;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 
@@ -27,20 +27,20 @@ public class EventSQL {
     private final EventSQLPublisher publisher;
     private final EventSQLConsumers consumers;
 
-    public EventSQL(DataSource dataSource, SQLDialect sqlDialect) {
+    public EventSQL(DataSource dataSource, EventSQLDialect sqlDialect) {
         this(dataSource, sqlDialect, Clock.systemUTC());
     }
 
-    public EventSQL(DataSource dataSource, SQLDialect sqlDialect, Clock clock) {
+    public EventSQL(DataSource dataSource, EventSQLDialect sqlDialect, Clock clock) {
         this(List.of(dataSource), sqlDialect, clock);
     }
 
-    public EventSQL(Collection<DataSource> dataSources, SQLDialect sqlDialect) {
+    public EventSQL(Collection<DataSource> dataSources, EventSQLDialect sqlDialect) {
         this(dataSources, sqlDialect, Clock.systemUTC());
     }
 
     public EventSQL(Collection<DataSource> dataSources,
-                    SQLDialect sqlDialect,
+                    EventSQLDialect sqlDialect,
                     Clock clock) {
         if (dataSources.isEmpty()) {
             throw new IllegalArgumentException("At least one data source is required");
@@ -53,13 +53,15 @@ public class EventSQL {
         System.setProperty("org.jooq.no-logo", "true");
         System.setProperty("org.jooq.no-tips", "true");
 
-        dataSources.forEach(dataSource -> {
-            var dslContext = DSL.using(dataSource, sqlDialect);
-            var transactions = new SqlTransactions(dslContext);
+        var jooqDialect = SQLDialect.valueOf(sqlDialect.name());
 
-            var topicRepository = new SqlTopicRepository(transactions);
-            var consumerRepository = new SqlConsumerRepository(transactions);
-            var eventRepository = new SqlEventRepository(transactions, sqlDialect);
+        dataSources.forEach(dataSource -> {
+            var dslContext = DSL.using(dataSource, jooqDialect);
+            var transactions = new SQLTransactions(dslContext);
+
+            var topicRepository = new SQLTopicRepository(transactions);
+            var consumerRepository = new SQLConsumerRepository(transactions);
+            var eventRepository = new SQLEventRepository(transactions, jooqDialect);
 
             var registry = new DefaultEventSQLRegistry(topicRepository, eventRepository, consumerRepository, transactions);
 

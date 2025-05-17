@@ -3,7 +3,6 @@ package com.binaryigor.eventsql.benchmarks;
 import com.binaryigor.eventsql.*;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import org.jooq.SQLDialect;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
@@ -25,7 +24,7 @@ public class EventSQLBenchmarksRunner {
     static final String DB_USERNAME = envValueOrDefault("DB_URL", "events");
     static final String DB_PASSWORD = envValueOrDefault("DB_PASSWORD", "events");
     static final int DATA_SOURCE_POOL_SIZE = envIntValueOrDefault("DATA_SOURCE_POOL_SIZE", 25);
-    static final SQLDialect SQL_DIALECT = SQLDialect.valueOf(envValueOrDefault("SQL_DIALECT", "POSTGRES"));
+    static final EventSQLDialect SQL_DIALECT = EventSQLDialect.valueOf(envValueOrDefault("SQL_DIALECT", "POSTGRES"));
     static final int RUNNER_INSTANCES = envIntValueOrDefault("RUNNER_INSTANCES", 1);
     static final int EVENTS_TO_PUBLISH = envIntValueOrDefault("EVENTS_TO_PUBLISH", 10_000);
     static final int EVENTS_RATE = envIntValueOrDefault("EVENTS_RATE", 1000);

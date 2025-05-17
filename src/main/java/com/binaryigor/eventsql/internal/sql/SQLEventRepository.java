@@ -14,9 +14,9 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.List;
 
-public class SqlEventRepository implements EventRepository {
+public class SQLEventRepository implements EventRepository {
 
-    private static final Logger logger = LoggerFactory.getLogger(SqlEventRepository.class);
+    private static final Logger logger = LoggerFactory.getLogger(SQLEventRepository.class);
     private static final Table<?> EVENT = DSL.table("event");
     private static final Field<String> TOPIC = DSL.field("topic", String.class);
     private static final Field<Long> ID = DSL.field("id", Long.class);
@@ -24,10 +24,10 @@ public class SqlEventRepository implements EventRepository {
     private static final Field<String> KEY = DSL.field("key", String.class);
     private static final Field<byte[]> VALUE = DSL.field("value", byte[].class);
     private static final Field<JSON> METADATA = DSL.field("metadata", JSON.class);
-    private final DslContextProvider contextProvider;
+    private final DSLContextProvider contextProvider;
     private final SQLDialect dialect;
 
-    public SqlEventRepository(DslContextProvider contextProvider, SQLDialect dialect) {
+    public SQLEventRepository(DSLContextProvider contextProvider, SQLDialect dialect) {
         this.contextProvider = contextProvider;
         this.dialect = dialect;
     }
@@ -80,7 +80,7 @@ public class SqlEventRepository implements EventRepository {
 
         events.forEach(ei -> {
             var e = ei.publication();
-            var metadataJSON = SimpleJsonMapper.toJson(e.metadata());
+            var metadataJSON = SimpleJSONMapper.toJSON(e.metadata());
             insert.values(e.topic(), ei.partition(), e.key(), e.value(), JSON.valueOf(metadataJSON));
         });
 

@@ -3,9 +3,9 @@ package com.binaryigor.eventsql.test;
 import com.binaryigor.eventsql.*;
 import com.binaryigor.eventsql.internal.ConsumerRepository;
 import com.binaryigor.eventsql.internal.EventRepository;
-import com.binaryigor.eventsql.internal.sql.SqlConsumerRepository;
-import com.binaryigor.eventsql.internal.sql.SqlEventRepository;
-import com.binaryigor.eventsql.internal.sql.SqlTransactions;
+import com.binaryigor.eventsql.internal.sql.SQLConsumerRepository;
+import com.binaryigor.eventsql.internal.sql.SQLEventRepository;
+import com.binaryigor.eventsql.internal.sql.SQLTransactions;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.jooq.DSLContext;
@@ -107,15 +107,15 @@ public abstract class IntegrationTest {
 
         dltEventFactory = eventSQL.consumers().dltEventFactory();
 
-        var transactions = new SqlTransactions(dslContext);
-        eventRepository = new SqlEventRepository(transactions, SQLDialect.POSTGRES);
-        consumerRepository = new SqlConsumerRepository(transactions);
+        var transactions = new SQLTransactions(dslContext);
+        eventRepository = new SQLEventRepository(transactions, SQLDialect.POSTGRES);
+        consumerRepository = new SQLConsumerRepository(transactions);
 
         cleanDb(dslContext, registry);
     }
 
     protected EventSQL newEventSQLInstance() {
-        return new EventSQL(dataSource, SQLDialect.POSTGRES, testClock);
+        return new EventSQL(dataSource, EventSQLDialect.POSTGRES, testClock);
     }
 
     @AfterEach
