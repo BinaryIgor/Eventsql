@@ -7,6 +7,4 @@
 * JavaDocs
 * Support schemas init in registry - why require schemas from users, if it is always the same (keeping dbs diffs in mind)?
 * using JOOQ tradeoffs?
-  * custom enums for db dialect - hide JOOQ usage!
 * full MySQL/MariaDB support
-* randomize delay option to increase parallelism

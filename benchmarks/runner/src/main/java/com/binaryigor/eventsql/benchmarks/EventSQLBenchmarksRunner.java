@@ -9,7 +9,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.sql.ResultSet;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -23,10 +22,10 @@ public class EventSQLBenchmarksRunner {
     static final String DB_URL = envValueOrDefault("DB_URL", "jdbc:postgresql://localhost:5432/events");
     static final String DB_USERNAME = envValueOrDefault("DB_URL", "events");
     static final String DB_PASSWORD = envValueOrDefault("DB_PASSWORD", "events");
-    static final int DATA_SOURCE_POOL_SIZE = envIntValueOrDefault("DATA_SOURCE_POOL_SIZE", 25);
-    static final EventSQLDialect SQL_DIALECT = EventSQLDialect.valueOf(envValueOrDefault("SQL_DIALECT", "POSTGRES"));
+    static final int DATA_SOURCE_POOL_SIZE = envIntValueOrDefault("DATA_SOURCE_POOL_SIZE", 50);
+    static final EventSQL.Dialect SQL_DIALECT = EventSQL.Dialect.valueOf(envValueOrDefault("SQL_DIALECT", "POSTGRES"));
     static final int RUNNER_INSTANCES = envIntValueOrDefault("RUNNER_INSTANCES", 1);
-    static final int EVENTS_TO_PUBLISH = envIntValueOrDefault("EVENTS_TO_PUBLISH", 10_000);
+    static final int EVENTS_TO_PUBLISH = envIntValueOrDefault("EVENTS_TO_PUBLISH", 60_000);
     static final int EVENTS_RATE = envIntValueOrDefault("EVENTS_RATE", 1000);
     static final String TEST_TOPIC = envValueOrDefault("TEST_TOPIC", "account_created");
     static final String TEST_CONSUMER = envValueOrDefault("TEST_CONSUMER", "benchmarks-consumer");
@@ -40,7 +39,7 @@ public class EventSQLBenchmarksRunner {
 
         var dataSource = dataSource(DB_URL, DB_USERNAME, DB_PASSWORD);
 
-        var eventSQL = new EventSQL(dataSource, SQL_DIALECT, Clock.systemUTC());
+        var eventSQL = EventSQL.of(new EventSQL.DataSourceProperties(SQL_DIALECT, DB_URL, DB_USERNAME, DB_PASSWORD, DATA_SOURCE_POOL_SIZE));
 
         printDelimiter();
 
@@ -276,7 +275,6 @@ public class EventSQLBenchmarksRunner {
                 throw new IllegalArgumentException("lastIdsPerPartition cannot be null or empty");
             }
         }
-
     }
 
     record ConsumerTableStats(Map<Integer, Long> lastIdsPerPartition) {

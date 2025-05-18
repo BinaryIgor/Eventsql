@@ -27,8 +27,10 @@ CREATE TABLE consumer (
   topic TEXT NOT NULL,
   name TEXT NOT NULL,
   partition SMALLINT NOT NULL,
+  first_event_id BIGINT,
   last_event_id BIGINT,
   last_consumption_at TIMESTAMP,
+  consumed_events BIGINT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   PRIMARY KEY (topic, name, partition)
 );

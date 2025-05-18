@@ -10,10 +10,11 @@ import com.binaryigor.eventsql.internal.sql.SQLConsumerRepository;
 import com.binaryigor.eventsql.internal.sql.SQLEventRepository;
 import com.binaryigor.eventsql.internal.sql.SQLTopicRepository;
 import com.binaryigor.eventsql.internal.sql.SQLTransactions;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 
-import javax.sql.DataSource;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -23,25 +24,40 @@ import static java.util.Collections.unmodifiableList;
 
 public class EventSQL {
 
+    public static final int PUBLISH_TIMEOUT = 250;
+    public static final int NEXT_EVENTS_READ_VISIBILITY_THRESHOLD = 333;
     private final EventSQLRegistry registry;
     private final EventSQLPublisher publisher;
     private final EventSQLConsumers consumers;
 
-    public EventSQL(DataSource dataSource, EventSQLDialect sqlDialect) {
-        this(dataSource, sqlDialect, Clock.systemUTC());
+    public static EventSQL of(DataSourceProperties dataSourceProperties) {
+        return of(dataSourceProperties, Clock.systemUTC());
     }
 
-    public EventSQL(DataSource dataSource, EventSQLDialect sqlDialect, Clock clock) {
-        this(List.of(dataSource), sqlDialect, clock);
+    public static EventSQL of(DataSourceProperties dataSourceProperties, Clock clock) {
+        return of(List.of(dataSourceProperties), clock);
     }
 
-    public EventSQL(Collection<DataSource> dataSources, EventSQLDialect sqlDialect) {
-        this(dataSources, sqlDialect, Clock.systemUTC());
+    public static EventSQL of(Collection<DataSourceProperties> dataSourceProperties) {
+        return of(dataSourceProperties, Clock.systemUTC());
     }
 
-    public EventSQL(Collection<DataSource> dataSources,
-                    EventSQLDialect sqlDialect,
-                    Clock clock) {
+    public static EventSQL of(Collection<DataSourceProperties> dataSourceProperties, Clock clock) {
+        return new EventSQL(dataSourceProperties.stream().map(props ->
+                        new DataSource(props.dialect(), dataSource(props)))
+                .toList(), clock);
+    }
+
+    /**
+     * Primary constructor used mainly for internal purposes.
+     * It should rarely be used outside library implementation, only if static of factories do not provide what is necessary.
+     * Additionally, if used, PUBLISH_TIMEOUT must be set as a query/statement timeout on each newly open data source connection.
+     * If not, there is a risk of loosing some events by consumers - it is being set by static of methods when dataSource() factory is called; check them out for guidance.
+     *
+     * @param dataSources list of data sources where events are hosted
+     * @param clock       clock used mainly for consumer delays
+     */
+    public EventSQL(Collection<DataSource> dataSources, Clock clock) {
         if (dataSources.isEmpty()) {
             throw new IllegalArgumentException("At least one data source is required");
         }
@@ -53,15 +69,14 @@ public class EventSQL {
         System.setProperty("org.jooq.no-logo", "true");
         System.setProperty("org.jooq.no-tips", "true");
 
-        var jooqDialect = SQLDialect.valueOf(sqlDialect.name());
-
         dataSources.forEach(dataSource -> {
-            var dslContext = DSL.using(dataSource, jooqDialect);
+            var jooqDialect = SQLDialect.valueOf(dataSource.dialect().name());
+            var dslContext = DSL.using(dataSource.dataSource(), jooqDialect);
             var transactions = new SQLTransactions(dslContext);
 
             var topicRepository = new SQLTopicRepository(transactions);
             var consumerRepository = new SQLConsumerRepository(transactions);
-            var eventRepository = new SQLEventRepository(transactions, jooqDialect);
+            var eventRepository = new SQLEventRepository(transactions, dataSource.dialect(), NEXT_EVENTS_READ_VISIBILITY_THRESHOLD);
 
             var registry = new DefaultEventSQLRegistry(topicRepository, eventRepository, consumerRepository, transactions);
 
@@ -72,7 +87,6 @@ public class EventSQL {
             publisherList.add(ops);
             consumersList.add(ops);
         });
-
 
         if (dataSources.size() == 1) {
             registry = registryList.getFirst();
@@ -85,6 +99,23 @@ public class EventSQL {
         }
     }
 
+    private static javax.sql.DataSource dataSource(DataSourceProperties dataSourceProperties) {
+        var config = new HikariConfig();
+        config.setJdbcUrl(dataSourceProperties.url());
+        config.setUsername(dataSourceProperties.username());
+        config.setPassword(dataSourceProperties.password());
+        config.setMinimumIdle(dataSourceProperties.minPoolSize());
+        config.setMaximumPoolSize(dataSourceProperties.maxPoolSize());
+
+        switch (dataSourceProperties.dialect()) {
+            case POSTGRES -> config.setConnectionInitSql("SET statement_timeout=" + PUBLISH_TIMEOUT);
+            case MYSQL -> config.setConnectionInitSql("SET SESSION max_execution_time=" + PUBLISH_TIMEOUT);
+            case MARIADB -> config.setConnectionInitSql("SET SESSION max_statement_time=" + (PUBLISH_TIMEOUT / 1000.0));
+        }
+
+        return new HikariDataSource(config);
+    }
+
     public EventSQLRegistry registry() {
         return registry;
     }
@@ -95,5 +126,36 @@ public class EventSQL {
 
     public EventSQLConsumers consumers() {
         return consumers;
+    }
+
+    public enum Dialect {
+        POSTGRES, MYSQL, MARIADB
+    }
+
+    public record DataSourceProperties(Dialect dialect,
+                                       String url,
+                                       String username,
+                                       String password,
+                                       int minPoolSize,
+                                       int maxPoolSize) {
+
+        public DataSourceProperties(Dialect dialect,
+                                    String url,
+                                    String username,
+                                    String password,
+                                    int poolSize) {
+            this(dialect, url, username, password, poolSize, poolSize);
+        }
+
+        public DataSourceProperties(Dialect dialect,
+                                    String url,
+                                    String username,
+                                    String password) {
+            this(dialect, url, username, password, 10, 20);
+        }
+    }
+
+    public record DataSource(Dialect dialect, javax.sql.DataSource dataSource) {
+
     }
 }

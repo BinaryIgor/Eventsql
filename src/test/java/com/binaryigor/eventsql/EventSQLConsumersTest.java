@@ -199,6 +199,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
         publisher.publish(event3);
 
         // then
+        nextEventsVisibilityDelay();
         delay(100);
         assertThat(capturedEventKeys)
                 .containsOnly("event1", "event2Failure");
@@ -249,7 +250,7 @@ public class EventSQLConsumersTest extends IntegrationTest {
         // given
         var consumer = new ConsumerDefinition(TOPIC, "test-consumer", false);
         registry.registerConsumer(consumer);
-        var capturedEvents = new ArrayList<Event>();
+        var capturedEvents = new CopyOnWriteArrayList<>();
         var eventsToPublish = 50;
         var exceptionsToThrow = new AtomicInteger(3);
 
@@ -325,14 +326,6 @@ public class EventSQLConsumersTest extends IntegrationTest {
 
     private void someDelay() {
         delay(10);
-    }
-
-    private void delay(int millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 
     private EventPublication toDltEvent(Throwable thrownException, EventPublication publication, String consumer) {

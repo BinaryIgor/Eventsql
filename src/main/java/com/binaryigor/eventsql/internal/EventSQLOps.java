@@ -170,10 +170,12 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
             return true;
         }
 
+        Long firstEventId;
         long lastEventId;
         boolean delayNextPolling;
         try {
             consumer.accept(events);
+            firstEventId = events.getFirst().id();
             lastEventId = events.getLast().id();
             delayNextPolling = events.size() < consumptionConfig.maxEvents();
         } catch (EventSQLConsumptionException e) {
@@ -188,10 +190,14 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
                 lastEventId = e.event().id() - 1;
                 delayNextPolling = true;
             }
+            firstEventId = null;
         }
 
         var now = clock.instant();
-        consumerRepository.update(consumerId, lastEventId, now);
+
+        var updatedConsumerState = consumerState.withUpdatedStats(firstEventId, lastEventId, now, events.size());
+        consumerRepository.update(updatedConsumerState);
+
         lastConsumptionAt.set(now);
 
         return delayNextPolling;

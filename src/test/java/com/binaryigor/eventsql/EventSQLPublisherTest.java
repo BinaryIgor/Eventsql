@@ -42,7 +42,7 @@ public class EventSQLPublisherTest extends IntegrationTest {
         var expectedKeyPartitions = events.stream()
                 .map(e -> tuple(e.key(), publisher.partitioner().partition(e, TOPIC_PARTITIONS)))
                 .toList();
-        assertThat(publishedEvents())
+        assertThat(publishedEvents(PARTITIONED_TOPIC))
                 .extracting("key", "partition")
                 .containsExactlyElementsOf(expectedKeyPartitions);
     }
@@ -54,7 +54,7 @@ public class EventSQLPublisherTest extends IntegrationTest {
                 .forEach(idx -> publisher.publish(TestObjects.randomEventPublication(PARTITIONED_TOPIC)));
 
         // then
-        assertThat(publishedEvents())
+        assertThat(publishedEvents(PARTITIONED_TOPIC))
                 .extracting("partition")
                 .contains(0, 1, 2);
     }
@@ -68,7 +68,7 @@ public class EventSQLPublisherTest extends IntegrationTest {
         publisher.publishAll(toPublishEvents);
 
         // then
-        assertThat(publishedEvents())
+        assertThat(publishedEvents(PARTITIONED_TOPIC))
                 .extracting("partition")
                 .contains(0, 1, 2);
     }
@@ -115,9 +115,5 @@ public class EventSQLPublisherTest extends IntegrationTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage(PARTITIONED_TOPIC + " topic has only %d partitions, but publishing to %d was requested"
                         .formatted(3, outsideValue));
-    }
-
-    private List<Event> publishedEvents() {
-        return eventRepository.nextEvents(PARTITIONED_TOPIC, null, Integer.MAX_VALUE);
     }
 }

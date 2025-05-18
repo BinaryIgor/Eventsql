@@ -1,16 +1,19 @@
 package com.binaryigor.eventsql.internal.sql;
 
 import com.binaryigor.eventsql.Event;
+import com.binaryigor.eventsql.EventSQL;
 import com.binaryigor.eventsql.internal.EventInput;
 import com.binaryigor.eventsql.internal.EventRepository;
 import org.jooq.Field;
 import org.jooq.JSON;
-import org.jooq.SQLDialect;
 import org.jooq.Table;
 import org.jooq.impl.DSL;
+import org.jooq.types.DayToSecond;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.Timestamp;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 
@@ -24,17 +27,20 @@ public class SQLEventRepository implements EventRepository {
     private static final Field<String> KEY = DSL.field("key", String.class);
     private static final Field<byte[]> VALUE = DSL.field("value", byte[].class);
     private static final Field<JSON> METADATA = DSL.field("metadata", JSON.class);
+    private static final Field<Timestamp> CREATED_AT = DSL.field("created_at", Timestamp.class);
     private final DSLContextProvider contextProvider;
-    private final SQLDialect dialect;
+    private final EventSQL.Dialect dialect;
+    private final int nextEventsReadVisibilityThreshold;
 
-    public SQLEventRepository(DSLContextProvider contextProvider, SQLDialect dialect) {
+    public SQLEventRepository(DSLContextProvider contextProvider, EventSQL.Dialect dialect, int nextEventsReadVisibilityThreshold) {
         this.contextProvider = contextProvider;
         this.dialect = dialect;
+        this.nextEventsReadVisibilityThreshold = nextEventsReadVisibilityThreshold;
     }
 
     @Override
     public void createPartition(String topic) {
-        if (dialect == SQLDialect.POSTGRES) {
+        if (dialect == EventSQL.Dialect.POSTGRES) {
             contextProvider.get()
                     .execute("CREATE TABLE %s PARTITION OF %s FOR VALUES IN ('%s')"
                             .formatted(topicTablePartitionName(topic), EVENT.getName(), topic));
@@ -53,7 +59,7 @@ public class SQLEventRepository implements EventRepository {
 
     @Override
     public void deletePartition(String topic) {
-        if (dialect == SQLDialect.POSTGRES) {
+        if (dialect == EventSQL.Dialect.POSTGRES) {
             contextProvider.get()
                     .dropTableIfExists(topicTablePartitionName(topic))
                     .cascade()
@@ -89,10 +95,12 @@ public class SQLEventRepository implements EventRepository {
 
     @Override
     public List<Event> nextEvents(String topic, Long lastId, int limit) {
-        return nextEvents(topic, null, lastId, limit);
+        return nextEvents(topic, null, lastId, nextEventsReadVisibilityThreshold, limit);
     }
 
-    private List<Event> nextEvents(String topic, Short partition, Long lastId, int limit) {
+    public List<Event> nextEvents(String topic, Short partition, Long lastId,
+                                  int visibilityThreshold,
+                                  int limit) {
         var condition = TOPIC.eq(topic);
         if (lastId != null) {
             condition = condition.and(ID.greaterThan(lastId));
@@ -100,6 +108,10 @@ public class SQLEventRepository implements EventRepository {
         if (partition != null) {
             condition = condition.and(PARTITION.eq(partition));
         }
+
+        var createdAtThreshold = DSL.currentTimestamp().minus(DayToSecond.valueOf(Duration.ofMillis(visibilityThreshold)));
+        condition = condition.and(CREATED_AT.lessThan(createdAtThreshold));
+
         return contextProvider.get()
                 .select(TOPIC, ID, PARTITION, KEY, VALUE, METADATA)
                 .from(EVENT)
@@ -111,6 +123,6 @@ public class SQLEventRepository implements EventRepository {
 
     @Override
     public List<Event> nextEvents(String topic, int partition, Long lastId, int limit) {
-        return nextEvents(topic, Short.valueOf((short) partition), lastId, limit);
+        return nextEvents(topic, (short) partition, lastId, nextEventsReadVisibilityThreshold, limit);
     }
 }

@@ -1,16 +1,12 @@
 package com.binaryigor.eventsql.test;
 
-import com.binaryigor.eventsql.EventSQL;
-import com.binaryigor.eventsql.EventSQLConsumers;
-import com.binaryigor.eventsql.EventSQLDialect;
-import com.binaryigor.eventsql.internal.EventRepository;
+import com.binaryigor.eventsql.*;
 import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLConsumers;
 import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLPublisher;
 import com.binaryigor.eventsql.internal.sharded.ShardedEventSQLRegistry;
 import com.binaryigor.eventsql.internal.sql.SQLEventRepository;
 import com.binaryigor.eventsql.internal.sql.SQLTransactions;
 import org.jooq.DSLContext;
-import org.jooq.SQLDialect;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -44,12 +40,14 @@ public abstract class ShardedIntegrationTest {
     protected ShardedEventSQLPublisher publisher;
     protected ShardedEventSQLConsumers consumers;
     protected EventSQLConsumers.DLTEventFactory dltEventFactory;
-    protected List<? extends EventRepository> eventRepositories;
+    protected List<SQLEventRepository> eventRepositories;
 
     @BeforeEach
     protected void baseSetup() {
         var testClock = new TestClock();
-        eventSQL = new EventSQL(dataSources, EventSQLDialect.POSTGRES, testClock);
+        eventSQL = new EventSQL(dataSources.stream()
+                .map(ds -> new EventSQL.DataSource(EventSQL.Dialect.POSTGRES, ds))
+                .toList(), testClock);
         registry = (ShardedEventSQLRegistry) eventSQL.registry();
         publisher = (ShardedEventSQLPublisher) eventSQL.publisher();
         consumers = (ShardedEventSQLConsumers) eventSQL.consumers();
@@ -57,7 +55,7 @@ public abstract class ShardedIntegrationTest {
         dltEventFactory = eventSQL.consumers().dltEventFactory();
 
         var transactions = dslContexts.stream().map(SQLTransactions::new).toList();
-        eventRepositories = transactions.stream().map(t -> new SQLEventRepository(t, SQLDialect.POSTGRES)).toList();
+        eventRepositories = transactions.stream().map(t -> new SQLEventRepository(t, EventSQL.Dialect.POSTGRES, 100)).toList();
 
         dslContexts.forEach(ctx -> cleanDb(ctx, registry));
     }
@@ -67,4 +65,7 @@ public abstract class ShardedIntegrationTest {
         consumers.stop(Duration.ofSeconds(3));
     }
 
+    protected List<Event> publishedEvents(int shard, String topic) {
+        return eventRepositories.get(shard).nextEvents(topic, null, null, 0, Integer.MAX_VALUE);
+    }
 }

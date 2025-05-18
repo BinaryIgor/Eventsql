@@ -67,6 +67,7 @@ public class EventSQLRegistryTest extends IntegrationTest {
         var topic = new TopicDefinition(TOPIC, -1);
         registry.registerTopic(topic);
         publisher.publish(TestObjects.randomEventPublication(TOPIC));
+        nextEventsVisibilityDelay();
 
         // expect
         assertRegisterThrowsHasEventsOrConsumersException(new TopicDefinition(topic.name(), 2));
@@ -230,10 +231,10 @@ public class EventSQLRegistryTest extends IntegrationTest {
     }
 
     private int topicEventsCount(String topic) {
-        return eventRepository.nextEvents(topic, null, Integer.MAX_VALUE).size();
+        return publishedEvents(topic).size();
     }
 
     private Consumer toConsumerOfPartition(ConsumerDefinition definition, int partition) {
-        return new Consumer(definition.topic(), definition.name(), partition, null, null);
+        return new Consumer(definition.topic(), definition.name(), partition, null, null, null, 0);
     }
 }
