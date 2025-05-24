@@ -1,6 +1,7 @@
 package com.binaryigor.eventsql.benchmarks;
 
 import com.binaryigor.eventsql.*;
+import com.binaryigor.eventsql.internal.EventSQLOps;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
@@ -23,10 +24,10 @@ public class EventSQLBenchmarksRunner {
     static final String DB_USERNAME = envValueOrDefault("DB_URL", "events");
     static final String DB_PASSWORD = envValueOrDefault("DB_PASSWORD", "events");
     static final int DATA_SOURCE_POOL_SIZE = envIntValueOrDefault("DATA_SOURCE_POOL_SIZE", 50);
-    static final EventSQL.Dialect SQL_DIALECT = EventSQL.Dialect.valueOf(envValueOrDefault("SQL_DIALECT", "POSTGRES"));
+    static final EventSQLDialect SQL_DIALECT = EventSQLDialect.valueOf(envValueOrDefault("SQL_DIALECT", "POSTGRES"));
     static final int RUNNER_INSTANCES = envIntValueOrDefault("RUNNER_INSTANCES", 1);
-    static final int EVENTS_TO_PUBLISH = envIntValueOrDefault("EVENTS_TO_PUBLISH", 60_000);
-    static final int EVENTS_RATE = envIntValueOrDefault("EVENTS_RATE", 1000);
+    static final int EVENTS_TO_PUBLISH = envIntValueOrDefault("EVENTS_TO_PUBLISH", 100_000);
+    static final int EVENTS_RATE = envIntValueOrDefault("EVENTS_RATE", 15_000);
     static final String TEST_TOPIC = envValueOrDefault("TEST_TOPIC", "account_created");
     static final String TEST_CONSUMER = envValueOrDefault("TEST_CONSUMER", "benchmarks-consumer");
 
@@ -39,7 +40,7 @@ public class EventSQLBenchmarksRunner {
 
         var dataSource = dataSource(DB_URL, DB_USERNAME, DB_PASSWORD);
 
-        var eventSQL = EventSQL.of(new EventSQL.DataSourceProperties(SQL_DIALECT, DB_URL, DB_USERNAME, DB_PASSWORD, DATA_SOURCE_POOL_SIZE));
+        var eventSQL = new EventSQL(dataSource, SQL_DIALECT);
 
         printDelimiter();
 
@@ -60,6 +61,7 @@ public class EventSQLBenchmarksRunner {
         var start = System.currentTimeMillis();
 
         publishEvents(eventSQL.publisher());
+        flushPublishBuffer(eventSQL.publisher());
         var publicationDuration = Duration.ofMillis(System.currentTimeMillis() - start);
 
         printDelimiter();
@@ -228,6 +230,18 @@ public class EventSQLBenchmarksRunner {
                 throw new RuntimeException(e);
             }
         });
+    }
+
+    static void flushPublishBuffer(EventSQLPublisher publisher) {
+        try {
+            if (publisher instanceof EventSQLOps ops) {
+                if (!ops.flushEventsBuffer()) {
+                    Thread.sleep(1000);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     static void waitForConsumers(DataSource dataSource, ConsumerDefinition consumerDefinition) throws Exception {

@@ -112,15 +112,17 @@ them:
 
 ```java
 import com.binaryigor.eventsql.EventSQL;
+import com.binaryigor.eventsql.EventSQLDialect;
+
 // EventSQL.Dialect is a dialect of your events backend - POSTGRES, MYSQL, MARIADB and so on;
 // as of now, only POSTGRES has fully tested support;
 // should also work with others but some things - event table partition management for example - works only with Postgres, for others it must be managed manually
-var eventSQL = EventSQL.of(new EventSQL.DataSourceProperties(EventSQL.Dialect.POSTGRES, "dbUrl", "dbUsername", "dbPassword"));
-ver shardedEventSQL = EventSQL.of(
-  List.of(
-    new EventSQL.DataSourceProperties(EventSQL.Dialect.POSTGRES, "db0Url", "db0Username", "db0Password"),
-    new EventSQL.DataSourceProperties(EventSQL.Dialect.POSTGRES, "db1Url", "db1Username", "db1Password"),
-    new EventSQL.DataSourceProperties(EventSQL.Dialect.POSTGRES, "db2Url", "db2Username", "db2Password")));
+var eventSQL = EventSQL.of(new EventSQL.DataSourceProperties(EventSQLDialect.POSTGRES, "dbUrl", "dbUsername", "dbPassword"));
+        ver shardedEventSQL = EventSQL.of(
+                List.of(
+                        new EventSQL.DataSourceProperties(EventSQLDialect.POSTGRES, "db0Url", "db0Username", "db0Password"),
+                        new EventSQL.DataSourceProperties(EventSQLDialect.POSTGRES, "db1Url", "db1Username", "db1Password"),
+                        new EventSQL.DataSourceProperties(EventSQLDialect.POSTGRES, "db2Url", "db2Username", "db2Password")));
 ```
 
 Sharded version works in the same vain - it just assumes that topics and consumers are hosted on multiple dbs.
