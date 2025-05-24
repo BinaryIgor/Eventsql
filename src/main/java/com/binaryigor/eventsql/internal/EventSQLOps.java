@@ -28,20 +28,28 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
     private final ConsumerRepository consumerRepository;
     private final EventRepository eventRepository;
     private final Clock clock;
+    private final AtomicBoolean publishThreadSet = new AtomicBoolean(false);
+    private Thread publishThread;
     private final Map<ConsumerId, Thread> consumerThreads = new ConcurrentHashMap<>();
     private Partitioner partitioner;
     private DLTEventFactory dltEventFactory;
+    private final int flushPublishBufferSize;
+    private final Duration flushPublishBufferDelay;
 
     public EventSQLOps(TopicDefinitionsCache topicDefinitionsCache,
                        Transactions transactions,
                        ConsumerRepository consumerRepository,
                        EventRepository eventRepository,
-                       Clock clock) {
+                       Clock clock,
+                       int flushPublishBufferSize,
+                       Duration flushPublishBufferDelay) {
         this.topicDefinitionsCache = topicDefinitionsCache;
         this.transactions = transactions;
         this.consumerRepository = consumerRepository;
         this.eventRepository = eventRepository;
         this.clock = clock;
+        this.flushPublishBufferSize = flushPublishBufferSize;
+        this.flushPublishBufferDelay = flushPublishBufferDelay;
         this.partitioner = new DefaultPartitioner();
         this.dltEventFactory = new DefaultDLTEventFactory(topicDefinitionsCache);
     }
@@ -69,6 +77,26 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
                 })
                 .toList();
         eventRepository.createAll(toCreateEvents);
+        if (!publishThreadSet.compareAndExchange(false, true)) {
+            startPublishThread();
+        }
+    }
+
+    private void startPublishThread() {
+        publishThread = Thread.startVirtualThread(() -> {
+            try {
+                while (running.get()) {
+                    Thread.sleep(flushPublishBufferDelay);
+                    flushEventsBuffer();
+                }
+            } catch (Exception e) {
+                logger.error("Fail to flush publish buffer", e);
+            }
+        });
+    }
+
+    public boolean flushEventsBuffer() {
+        return eventRepository.flushBuffer(flushPublishBufferSize);
     }
 
     private void validateNewEvent(EventInput publication, TopicDefinition topic) {
@@ -170,10 +198,12 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
             return true;
         }
 
+        Long firstEventId;
         long lastEventId;
         boolean delayNextPolling;
         try {
             consumer.accept(events);
+            firstEventId = events.getFirst().id();
             lastEventId = events.getLast().id();
             delayNextPolling = events.size() < consumptionConfig.maxEvents();
         } catch (EventSQLConsumptionException e) {
@@ -188,10 +218,14 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
                 lastEventId = e.event().id() - 1;
                 delayNextPolling = true;
             }
+            firstEventId = null;
         }
 
         var now = clock.instant();
-        consumerRepository.update(consumerId, lastEventId, now);
+
+        var updatedConsumerState = consumerState.withUpdatedStats(firstEventId, lastEventId, now, events.size());
+        consumerRepository.update(updatedConsumerState);
+
         lastConsumptionAt.set(now);
 
         return delayNextPolling;
@@ -224,35 +258,42 @@ public class EventSQLOps implements EventSQLPublisher, EventSQLConsumers {
     }
 
     // TODO: refactor
+    @Override
     public void stop(Duration timeout) {
-        logger.info("Stopping consumers...");
+        logger.info("Stopping publisher and consumers...");
         running.set(false);
-        var latch = waitForConsumersToFinishAsync();
+        var latch = waitForPublisherAndConsumersToFinishAsync();
         try {
             if (latch.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                logger.info("All consumers have stopped gracefully!");
+                logger.info("Publisher and all consumers have stopped gracefully!");
             } else {
-                logger.warn("Some consumers didn't finish in {}, exiting in any case", timeout);
+                logger.warn("Publisher or some consumers didn't finish in {}, exiting in any case", timeout);
             }
         } catch (Exception e) {
-            logger.error("Problem while stopping consumers", e);
+            logger.error("Problem while stopping publisher/consumers", e);
         }
     }
 
-    private CountDownLatch waitForConsumersToFinishAsync() {
+    private CountDownLatch waitForPublisherAndConsumersToFinishAsync() {
         var latch = new CountDownLatch(1);
         Thread.startVirtualThread(() -> {
             while (true) {
+                var alivePublisher = publishThreadSet.get() && publishThread.isAlive();
                 var aliveConsumers = consumerThreads.entrySet().stream()
                         .filter(e -> e.getValue().isAlive())
                         .map(Map.Entry::getKey)
                         .toList();
-                if (aliveConsumers.isEmpty()) {
+                if (!alivePublisher && aliveConsumers.isEmpty()) {
                     latch.countDown();
                     break;
                 } else {
                     try {
-                        logger.info("Some consumers are still alive, waiting for them to finish: {}", aliveConsumers);
+                        if (alivePublisher) {
+                            logger.info("Publisher is still alive, waiting for it to finish");
+                        }
+                        if (!aliveConsumers.isEmpty()) {
+                            logger.info("Some consumers are still alive, waiting for them to finish: {}", aliveConsumers);
+                        }
                         Thread.sleep(500);
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);

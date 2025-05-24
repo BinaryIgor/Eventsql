@@ -36,8 +36,10 @@ CREATE TABLE consumer (
   topic TEXT NOT NULL,
   name TEXT NOT NULL,
   partition SMALLINT NOT NULL,
+  first_event_id BIGINT,
   last_event_id BIGINT,
   last_consumption_at TIMESTAMP,
+  consumed_events BIGINT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   PRIMARY KEY (topic, name, partition)
 );
@@ -54,6 +56,9 @@ FOR UPDATE SKIP LOCKED;
 
 SELECT * FROM event
 WHERE topic = :topic AND (:last_event_id IS NULL OR id > :last_event_id)
+  -- eventual consistency of auto increment; there is no guarantee that record of id 2 is visible after id 1 record --
+  -- in the implementation, we set insert statements timeout to '250 ms' so it is safe --
+  AND created_at < (NOW() - interval '333 ms')
 ORDER BY id LIMIT :limit;
 
 (process events)
@@ -82,6 +87,9 @@ FOR UPDATE SKIP LOCKED;
 
 SELECT * FROM event
 WHERE topic = :topic AND partition = 0 AND (:last_event_id IS NULL OR id > :last_event_id)
+  -- eventual consistency of auto increment; there is no guarantee that record of id 2 is visible after id 1 record --
+  -- in the implementation, we set insert statements timeout to '250 ms' so it is safe --
+  AND created_at < (NOW() - interval '333 ms')
 ORDER BY id LIMIT :limit;
 
 (process events)
@@ -99,20 +107,22 @@ definition has. It's a rather acceptable tradeoff and easy to enforce at the lib
 
 ## How to use it
 
-`EventSQL` is an entrypoint to the whole library. It requires standard Java `javax.sql.DataSource` or a list of
+`EventSQL` is an entrypoint to the whole library. It requires single data source properties or a list of
 them:
 
 ```java
-
 import com.binaryigor.eventsql.EventSQL;
-import javax.sql.DataSource;
-// dialect of your events backend - POSTGRES, MYSQL, MARIADB and so on;
+import com.binaryigor.eventsql.EventSQLDialect;
+
+// EventSQL.Dialect is a dialect of your events backend - POSTGRES, MYSQL, MARIADB and so on;
 // as of now, only POSTGRES has fully tested support;
 // should also work with others but some things - event table partition management for example - works only with Postgres, for others it must be managed manually
-import org.jooq.SQLDialect;
-
-var eventSQL = new EventSQL(dataSource, SQLDialect.POSTGRES);
-ver shardedEventSQL = new EventSQL(dataSources, SQLDialect.POSTGRES);
+var eventSQL = EventSQL.of(new EventSQL.DataSourceProperties(EventSQLDialect.POSTGRES, "dbUrl", "dbUsername", "dbPassword"));
+        ver shardedEventSQL = EventSQL.of(
+                List.of(
+                        new EventSQL.DataSourceProperties(EventSQLDialect.POSTGRES, "db0Url", "db0Username", "db0Password"),
+                        new EventSQL.DataSourceProperties(EventSQLDialect.POSTGRES, "db1Url", "db1Username", "db1Password"),
+                        new EventSQL.DataSourceProperties(EventSQLDialect.POSTGRES, "db2Url", "db2Username", "db2Password")));
 ```
 
 Sharded version works in the same vain - it just assumes that topics and consumers are hosted on multiple dbs.

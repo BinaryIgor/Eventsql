@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.List;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -37,12 +36,13 @@ public class EventSQLPublisherTest extends IntegrationTest {
 
         // when
         events.forEach(publisher::publish);
+        flushPublishBuffer();
 
         // then
         var expectedKeyPartitions = events.stream()
                 .map(e -> tuple(e.key(), publisher.partitioner().partition(e, TOPIC_PARTITIONS)))
                 .toList();
-        assertThat(publishedEvents())
+        assertThat(publishedEvents(PARTITIONED_TOPIC))
                 .extracting("key", "partition")
                 .containsExactlyElementsOf(expectedKeyPartitions);
     }
@@ -52,9 +52,10 @@ public class EventSQLPublisherTest extends IntegrationTest {
         // when
         IntStream.range(0, 25)
                 .forEach(idx -> publisher.publish(TestObjects.randomEventPublication(PARTITIONED_TOPIC)));
+        flushPublishBuffer();
 
         // then
-        assertThat(publishedEvents())
+        assertThat(publishedEvents(PARTITIONED_TOPIC))
                 .extracting("partition")
                 .contains(0, 1, 2);
     }
@@ -66,9 +67,10 @@ public class EventSQLPublisherTest extends IntegrationTest {
                 .limit(50)
                 .toList();
         publisher.publishAll(toPublishEvents);
+        flushPublishBuffer();
 
         // then
-        assertThat(publishedEvents())
+        assertThat(publishedEvents(PARTITIONED_TOPIC))
                 .extracting("partition")
                 .contains(0, 1, 2);
     }
@@ -115,9 +117,5 @@ public class EventSQLPublisherTest extends IntegrationTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage(PARTITIONED_TOPIC + " topic has only %d partitions, but publishing to %d was requested"
                         .formatted(3, outsideValue));
-    }
-
-    private List<Event> publishedEvents() {
-        return eventRepository.nextEvents(PARTITIONED_TOPIC, null, Integer.MAX_VALUE);
     }
 }
